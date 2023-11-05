@@ -28,7 +28,8 @@
 
 #pragma once
 
-#include <ros/ros.h>
+//#include <ros/ros.h>
+#include "rclcpp/rclcpp.hpp"
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
@@ -46,12 +47,21 @@
 #include "kindyn/controller/cardsflow_command_interface.hpp"
 
 
-#include <actionlib/server/simple_action_server.h>
 
-#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/Vector3.h>
-#include <std_msgs/Float32.h>
-#include <sensor_msgs/JointState.h>
+//
+// action_msgs rclcpp_action
+//#include <actionlib/server/simple_action_server.h>
+
+// #include <geometry_msgs/PoseStamped.h>
+// #include <geometry_msgs/Vector3.h>
+// #include <std_msgs/Float32.h>
+// #include <sensor_msgs/JointState.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/vector3.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
+
+// not sure about those msgs 
 #include <roboy_simulation_msgs/Tendon.h>
 #include <roboy_simulation_msgs/ControllerType.h>
 #include <roboy_simulation_msgs/JointState.h>
@@ -63,11 +73,16 @@
 #include <roboy_control_msgs/MoveEndEffectorAction.h>
 #include <roboy_control_msgs/GetLinkPose.h>
 
-#include <tf/tf.h>
-#include <tf/transform_broadcaster.h>
-#include <tf/transform_listener.h>
-#include <tf_conversions/tf_eigen.h>
-#include <eigen_conversions/eigen_msg.h>
+// #include <tf/tf.h>
+// #include <tf/transform_broadcaster.h>
+// #include <tf/transform_listener.h>
+// #include <tf_conversions/tf_eigen.h>
+// #include <eigen_conversions/eigen_msg.h>
+#include <tf2/LinearMath/Transform.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_eigen/tf2_eigen.h>
+
 
 #include <qpOASES.hpp>
 
@@ -120,14 +135,14 @@ namespace cardsflow {
              * This is the read function and should implement reading the state of your robot
              */
             virtual void read(){
-                ROS_WARN_STREAM_THROTTLE(1, "reading virtual, "
+                RCLCPP_WARN_STREAM_THROTTLE(rclcpp::get_logger(), *rclcpp::get_clock(), std::chrono::seconds(1), "reading virtual, "
                                             "you probably forgot to implement your own read function?!");
             };
             /**
              * This is the write function and should implement writing commands to your robot
              */
             virtual void write(){
-                ROS_WARN_STREAM_THROTTLE(1, "writing virtual, "
+                RCLCPP_WARN_STREAM_THROTTLE(rclcpp::get_logger(), *rclcpp::get_clock(), std::chrono::seconds(1), "writing virtual, "
                                             "you probably forgot to implement your own write function?!");
             };
         private:
@@ -199,13 +214,40 @@ namespace cardsflow {
 
             VectorXd resolve_function(MatrixXd &A_eq, VectorXd &b_eq, VectorXd &f_min, VectorXd &f_max);
 
-            ros::NodeHandlePtr nh; /// ROS node handle
-            boost::shared_ptr <ros::AsyncSpinner> spinner; /// async ROS spinner
-            ros::Publisher robot_state_pub, tendon_state_pub, joint_state_pub, cardsflow_joint_states_pub; /// ROS robot pose and tendon publisher
-            ros::Publisher robot_state_target_pub, tendon_state_target_pub, joint_state_target_pub; /// target publisher
-            ros::Subscriber controller_type_sub, joint_state_sub, joint_target_sub, floating_base_sub, interactive_marker_sub; /// ROS subscribers
-            ros::ServiceServer ik_srv, ik_two_frames_srv, fk_srv, execute_ik_srv, link_pose_srv;
-            map<string,boost::shared_ptr<actionlib::SimpleActionServer<roboy_control_msgs::MoveEndEffectorAction>>> moveEndEffector_as;
+            //ros::NodeHandlePtr nh; /// ROS node handle
+
+            std::make_shared<rclcpp::Node>() node;
+
+            //ros::Publisher robot_state_pub, tendon_state_pub, joint_state_pub, cardsflow_joint_states_pub; /// ROS robot pose and tendon publisher
+            rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr robot_state_pub;
+            rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_pub;
+            rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_pub;
+            rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr cardsflow_joint_states_pub;
+            
+            //ros::Publisher robot_state_target_pub, tendon_state_target_pub, joint_state_target_pub; /// target publisher
+            rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr robot_state_target_pub;
+            rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_target_pub;
+            rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_target_pub;    
+                    
+            //ros::Subscriber controller_type_sub, joint_state_sub, joint_target_sub, floating_base_sub, interactive_marker_sub; /// ROS subscribers
+            //                      ????                        //not used
+            rclcpp::Subscription<std_msgs::msg::String>::SharedPtr controller_type_sub;
+
+            rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub;
+            rclcpp::Subscription<sensor_msgs::msg::JointStateConstPtr>::SharedPtr joint_target_sub;
+            rclcpp::Subscription<geometry_msgs::msg::PoseConstPtr>::SharedPtr floating_base_sub;
+            rclcpp::Subscription<visualization_msgs::InteractiveMarkerFeedbackConstPtr>::SharedPtr interactive_marker_sub;            
+            
+            //ros::ServiceServer ik_srv, ik_two_frames_srv, fk_srv, execute_ik_srv, link_pose_srv;
+            rclcpp::Service<roboy_middleware_msgs::InverseKinematics>::SharedPtr ik_srv;
+            rclcpp::Service<roboy_middleware_msgs::InverseKinematicsMultipleFrames>::SharedPtr ik_two_frames_srv;
+            rclcpp::Service<roboy_middleware_msgs::ForwardKinematics>::SharedPtr fk_srv;
+            rclcpp::Service<roboy_middleware_msgs::InverseKinematics>::SharedPtr execute_ik_srv;
+            rclcpp::Service<roboy_control_msgs::GetLinkPose>::SharedPtr link_pose_srv;
+            
+            
+            //map<string,boost::shared_ptr<actionlib::SimpleActionServer<roboy_control_msgs::MoveEndEffectorAction>>> moveEndEffector_as;
+            map<string, shared_ptr<rclcpp_action::Server<roboy_control_msgs::action::MoveEndEffector>>> moveEndEffector_as;
 
 
             map<string,iDynTree::KinDynComputations> ik_models; /// the robot models for each endeffector
