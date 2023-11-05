@@ -33,11 +33,13 @@
 #include <pluginlib/class_list_macros.h>
 #include "kindyn/robot.hpp"
 #include "kindyn/controller/cardsflow_state_interface.hpp"
-#include <roboy_simulation_msgs/ControllerType.h>
+// #include <roboy_simulation_msgs/ControllerType.h>
+#include <roboy_simulation_msgs/msg/ControllerType.h>
 #include <math.h>
 #include <cmath>
-#include <std_msgs/Float32.h>
-#include <roboy_control_msgs/SetControllerParameters.h>
+#include <std_msgs/msg/Float32.h>
+// #include <roboy_control_msgs/SetControllerParameters.h>
+#include <roboy_control_msgs/msg/SetControllerParameters.h>
 
 
 #include "rclcpp/rclcpp.hpp"
@@ -71,12 +73,12 @@ public:
      * @return success
      */                                                         //ros::NodeHandle &n                
     bool init(hardware_interface::CardsflowCommandInterface *hw, rclcpp::Node::SharedPtr node) {
-        nh = node;
+        node_ = node;
         // get joint name from the parameter server
         //.  !nh.get_parameter
-        if (!nh->get_parameter("joint", joint_name)) {
+        if (!node_->get_parameter("joint", joint_name)) {
             //ROS_ERROR   
-            RCLCPP_ERROR(nh->get_logger(), "No joint given (namespace: %s)", nh->get_namespace().c_str());
+            RCLCPP_ERROR(node_->get_logger(), "No joint given (namespace: %s)", node_->get_namespace().c_str());
             return false;
         }
         
@@ -87,14 +89,14 @@ public:
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
 
-        controller_state = nh->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
+        controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
         rclcpp::Rate r(10);
 
         while(controller_state->getNumSubscribers()==0) // we wait until the controller state is available
             r.sleep();
         joint = hw->getHandle(joint_name); // throws on failure
         joint_index = joint.getJointIndex();
-        last_update = nh->now();
+        last_update = node_->now();
 //        joint_command = nh.subscribe((joint_name+"/target").c_str(),1,&CableLengthController::JointPositionCommand, this);
 //      if needed, 
 //      joint_command = nh->create_subscription<std_msgs::msg::Float32>(joint_name + "/target", 10, 
@@ -128,8 +130,8 @@ public:
      * @param time current time
      */
     void starting(const rclcpp::Time& time) {
-        RCLCPP_WARN(nh->get_logger(), "cable length controller started for %s with index %d", joint_name.c_str(), joint_index);
-        roboy_simulation_msgs::ControllerType msg;
+        RCLCPP_WARN(node_->get_logger(), "cable length controller started for %s with index %d", joint_name.c_str(), joint_index);
+        roboy_simulation_msgs::msg::ControllerType msg;
         msg.joint_name = joint_name;
         msg.type = CARDSflow::ControllerType::cable_length_controller;
         controller_state->publish(msg);
@@ -139,20 +141,20 @@ public:
      * @param time current time
      */
     void stopping(const rclcpp::Time& time) {
-        RCLCPP_WARN(nh->get_logger(), "cable length controller stopped for %s", joint_name.c_str());
+        RCLCPP_WARN(node_->get_logger(), "cable length controller stopped for %s", joint_name.c_str());
     }
 
     /**
      * Joint position command callback for this joint
      * @param msg joint position target in radians
      */
-    void JointPositionCommand(const std_msgs::Float32ConstPtr &msg){
+    void JointPositionCommand(const std_msgs::msg::Float32ConstPtr &msg){
         joint.setJointPositionCommand(msg->data);
     }
 
 private:
     double p_error_last = 0; /// last error
-    rclcpp::Node::SharedPtr nh; /// ROS2 node
+    rclcpp::Node::SharedPtr node_; /// ROS2 node
 
     //ros::Publisher controller_state; /// publisher for controller state
     rclcpp::Publisher<roboy_simulation_msgs::msg::ControllerType>::SharedPtr controller_state;/// publisher for controller state

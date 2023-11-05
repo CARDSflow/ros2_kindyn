@@ -32,17 +32,17 @@ void Robot::updatePublishers() {
 void Robot::updateSubscribers(){
     if (external_robot_state) {
         RCLCPP_WARN(rclcpp::get_logger(),"Subscribing to external joint state");
-        joint_state_sub = node_->create_subscription<sensor_msgs::JointStateConstPtr>(
+        joint_state_sub = node_->create_subscription<sensor_msgs::msg::JointStateConstPtr>(
             topic_root + "/sensing/external_joint_states", 
             1, 
             std::bind(&Robot::JointState, this, std::placeholders::_1));
     }
-    joint_target_sub = node_->create_subscription<sensor_msgs::JointStateConstPtr>(
+    joint_target_sub = node_->create_subscription<sensor_msgs::msg::JointStateConstPtr>(
         topic_root + "control/joint_targets", 
         100, 
         std::bind(&Robot::JointTarget, this, std::placeholders::_1));
 
-    controller_type_sub = node_->create_subscription<roboy_simulation_msgs::ControllerTypeConstPtr>(
+    controller_type_sub = node_->create_subscription<roboy_simulation_msgs::msg::ControllerTypeConstPtr>(
         "/controller_type", 
         100, 
         std::bind(&Robot::controllerType, this, std::placeholders::_1));
@@ -51,7 +51,7 @@ void Robot::updateSubscribers(){
         topic_root + "control/freeze", 
         std::bind(&Robot::FreezeService, this, std::placeholders::_1, std::placeholders::_2));
 
-    zero_joints_sub = node_->create_subscription<roboy_control_msgs::StringsPtr>(
+    zero_joints_sub = node_->create_subscription<roboy_control_msgs::msg::StringsPtr>(
         topic_root + "control/zero_joints", 
         1, 
         std::bind(&Robot::ZeroJoints, this, std::placeholders::_1));
@@ -264,7 +264,7 @@ void Robot::update(){
 void Robot::publishViz(){
     if ((1.0 / (rclcpp::Clock().now() - last_visualization).toSec()) < 30) {
         { // tendon state publisher
-            roboy_simulation_msgs::Tendon msg;
+            roboy_simulation_msgs::msg::Tendon msg;
             VectorXd l;
             l.resize(kinematics.number_of_cables);
             kinematics.getRobotCableFromJoints(l);
@@ -323,7 +323,7 @@ void Robot::publishViz(){
         }
         { // joint state publisher
             sensor_msgs::msg::JointState cf_msg;
-            roboy_simulation_msgs::JointState msg;
+            roboy_simulation_msgs::msg::JointState msg;
             msg.names = kinematics.joint_names;
             cf_msg.name = kinematics.joint_names;
             cf_msg.header.stamp = rclcpp::Clock().now();
@@ -399,7 +399,7 @@ void Robot::JointState(const sensor_msgs::msg::JointStateConstPtr &msg) {
     }
 }
 
-void Robot::controllerType(const roboy_simulation_msgs::ControllerTypeConstPtr &msg) {
+void Robot::controllerType(const roboy_simulation_msgs::msg::ControllerTypeConstPtr &msg) {
     auto it = find(kinematics.joint_names.begin(), kinematics.joint_names.end(),msg->joint_name);
     if(it!=kinematics.joint_names.end()) {
         RCLCPP_INFO(rclcpp::get_logger(),"%s changed controller to %s", msg->joint_name.c_str(),
@@ -410,8 +410,8 @@ void Robot::controllerType(const roboy_simulation_msgs::ControllerTypeConstPtr &
     }
 }
 
-bool Robot::FreezeService(std_srvs::Trigger::Request &req,
-                          std_srvs::Trigger::Response &res) {
+bool Robot::FreezeService(std_srvs::srv::Trigger::Request &req,
+                          std_srvs::srv::Trigger::Response &res) {
     for (int i = 1; i < kinematics.number_of_links; i++) {
         q_target = q;
     }
@@ -421,7 +421,7 @@ bool Robot::FreezeService(std_srvs::Trigger::Request &req,
 
 }
 
-void Robot::ZeroJoints(const roboy_control_msgs::StringsPtr &msg) {
+void Robot::ZeroJoints(const roboy_control_msgs::msg::StringsPtr &msg) {
     //ROS_WARN(msg->names);
     if (msg->names.empty()) {
         RCLCPP_WARN_STREAM(rclcpp::get_logger(),"Setting all joint targets to zero");

@@ -32,9 +32,11 @@
 #include <pluginlib/class_list_macros.h>
 #include "kindyn/robot.hpp"
 #include "kindyn/controller/cardsflow_command_interface.hpp"
-#include <roboy_simulation_msgs/ControllerType.h>
-#include <std_msgs/Float32.h>
-#include <roboy_control_msgs/SetControllerParameters.h>
+// #include <roboy_simulation_msgs/ControllerType.h>
+#include <roboy_simulation_msgs/msg/ControllerType.h>
+#include <std_msgs/msg/Float32.h>
+// #include <roboy_control_msgs/SetControllerParameters.h>
+#include <roboy_control_msgs/srv/SetControllerParameters.h>
 
 #include "rclcpp/rclcpp.hpp"
 using namespace std;
@@ -53,24 +55,24 @@ public:
      * @return success
      */
     bool init(hardware_interface::EffortJointInterface rclcpp::Node::SharedPtr node) {
-        nh = node;
+        node_ = node;
         // get joint name from the parameter server
-        if (!nh->get_parameter("joint", joint_name)) {
-             RCLCPP_ERROR(nh->get_logger(),"No joint given (namespace: %s)", n.getNamespace().c_str());
+        if (!node_->get_parameter("joint", joint_name)) {
+             RCLCPP_ERROR(node_->get_logger(),"No joint given (namespace: %s)", node_->get_namespace().c_str());
             return false;
         }
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
-        controller_state = nh->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
+        controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
         rclcpp::Rate r(10);
 
         while(controller_state->getNumSubscribers()==0)
             r.sleep();
         joint = hw->getHandle(joint_name); // throws on failure
-        joint_command = nh->create_subscription<std_msgs::msg::Float32>(joint_name + "/target", 10, 
+        joint_command = node_->create_subscription<std_msgs::msg::Float32>(joint_name + "/target", 10, 
             std::bind(&TorquePositionController::JointPositionCommand, this, std::placeholders::_1));
         
-        controller_parameter_srv = nh->create_service<roboy_control_msgs::srv::SetControllerParameters>
+        controller_parameter_srv = node_->create_service<roboy_control_msgs::srv::SetControllerParameters>
         (joint_name + "/params", 
         std::bind(&TorquePositionController::setControllerParameters,
          this, std::placeholders::_1, std::placeholders::_2));
@@ -98,8 +100,8 @@ public:
      * @param time current time
      */
     void starting(const rclcpp::Time& time) {
-        RCLCPP_WARN(nh->get_logger(),"torque position controller started for %s", joint_name.c_str());
-        roboy_simulation_msgs::ControllerType msg;
+        RCLCPP_WARN(node_->get_logger(),"torque position controller started for %s", joint_name.c_str());
+        roboy_simulation_msgs::msg::ControllerType msg;
         msg.joint_name = joint_name;
         msg.type = CARDSflow::ControllerType::torque_position_controller;
         controller_state->publish(msg);
@@ -109,13 +111,13 @@ public:
      * Called by controller manager when the controller is about to be stopped
      * @param time current time
      */
-    void stopping(const rclcpp::Time& time) { RCLCPP_WARN(nh->get_logger(),"cable length controller stopped for %s", joint_name.c_str());}
+    void stopping(const rclcpp::Time& time) { RCLCPP_WARN(node_->get_logger(),"cable length controller stopped for %s", joint_name.c_str());}
 
     /**
      * Joint position command callback for this joint
      * @param msg joint position target in radians
      */
-    void JointCommand(const std_msgs::Float32ConstPtr &msg){
+    void JointCommand(const std_msgs::msg::Float32ConstPtr &msg){
         q_target = msg->data;
     }
 
@@ -125,8 +127,8 @@ public:
      * @param res success
      * @return success
      */
-    bool setControllerParameters( roboy_control_msgs::SetControllerParameters::Request &req,
-                                  roboy_control_msgs::SetControllerParameters::Response &res){
+    bool setControllerParameters( roboy_control_msgs::srv::SetControllerParameters::Request &req,
+                                  roboy_control_msgs::srv::SetControllerParameters::Response &res){
         Kp = req.kp;
         Kd = req.kd;
         res.success = true;
@@ -135,7 +137,7 @@ public:
 private:
     double q_target = 0; /// joint position target
     double Kp = 3000, Kd = 5; /// PD gains
-    rclcpp::Node::SharedPtr nh; /// ROS2 node
+    rclcpp::Node::SharedPtr node_; /// ROS2 node
     rclcpp::Publisher<roboy_simulation_msgs::msg::ControllerType>::SharedPtr controller_state;/// publisher for controller state
     rclcpp::Service<rclcpp::srv::SetParameters>::SharedPtr controller_parameter_srv; /// service for controller parameters
 

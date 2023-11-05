@@ -40,7 +40,6 @@
 #include <iDynTree/InverseKinematics.h>
 
 #include "tinyxml.h"
-
 #include "kindyn/cable.hpp"
 #include "kindyn/EigenExtension.hpp"
 #include "kindyn/controller/cardsflow_state_interface.hpp"
@@ -62,16 +61,27 @@
 #include <sensor_msgs/msg/joint_state.hpp>
 
 // not sure about those msgs 
-#include <roboy_simulation_msgs/Tendon.h>
-#include <roboy_simulation_msgs/ControllerType.h>
-#include <roboy_simulation_msgs/JointState.h>
-#include <roboy_middleware_msgs/ForwardKinematics.h>
-#include <roboy_middleware_msgs/InverseKinematics.h>
-#include <roboy_middleware_msgs/InverseKinematicsMultipleFrames.h>
-#include <roboy_middleware_msgs/MotorCommand.h>
-#include <roboy_middleware_msgs/MotorStatus.h>
-#include <roboy_control_msgs/MoveEndEffectorAction.h>
-#include <roboy_control_msgs/GetLinkPose.h>
+// #include <roboy_simulation_msgs/Tendon.h>
+// #include <roboy_simulation_msgs/ControllerType.h>
+// #include <roboy_simulation_msgs/JointState.h>
+// #include <roboy_middleware_msgs/ForwardKinematics.h>
+// #include <roboy_middleware_msgs/InverseKinematics.h>
+// #include <roboy_middleware_msgs/InverseKinematicsMultipleFrames.h>
+// #include <roboy_middleware_msgs/MotorCommand.h>
+// #include <roboy_middleware_msgs/MotorStatus.h>
+// #include <roboy_control_msgs/MoveEndEffectorAction.h>
+// #include <roboy_control_msgs/GetLinkPose.h>
+
+#include <roboy_simulation_msgs/msg/Tendon.h>
+#include <roboy_simulation_msgs/msg/ControllerType.h>
+#include <roboy_simulation_msgs/msg/JointState.h>
+#include <roboy_middleware_msgs/srv/ForwardKinematics.h>
+#include <roboy_middleware_msgs/srv/InverseKinematics.h>
+#include <roboy_middleware_msgs/srv/InverseKinematicsMultipleFrames.h>
+#include <roboy_middleware_msgs/msg/MotorCommand.h>
+#include <roboy_middleware_msgs/msg/MotorStatus.h>
+#include <roboy_control_msgs/action/MoveEndEffectorAction.h>
+#include <roboy_control_msgs/srv/GetLinkPose.h>
 
 // #include <tf/tf.h>
 // #include <tf/transform_broadcaster.h>
@@ -87,7 +97,10 @@
 #include <qpOASES.hpp>
 
 #include <controller_manager/controller_manager.h>
-#include <controller_manager_msgs/LoadController.h>
+
+// not sure about those header files in ros2
+//#include <controller_manager_msgs/LoadController.h>
+#include <controller_manager_msgs/srv/load_controller.h>
 #include <hardware_interface/joint_state_interface.h>
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
@@ -95,7 +108,9 @@
 #include <boost/numeric/odeint.hpp>
 
 #include <common_utilities/rviz_visualization.hpp>
-#include <visualization_msgs/InteractiveMarkerFeedback.h>
+// #include <visualization_msgs/InteractiveMarkerFeedback.h>
+#include <visualization_msgs/msg/InteractiveMarkerFeedback.h>
+
 #include <thread>
 
 using namespace qpOASES;
@@ -151,7 +166,8 @@ namespace cardsflow {
              * Move endeffector action server
              * @param goal
              */
-            void MoveEndEffector(const roboy_control_msgs::MoveEndEffectorGoalConstPtr &goal);
+            void MoveEndEffector(const roboy_control_msgs::action::
+            MoveEndEffectorGoalConstPtr &goal);
             /**
              * parses the cardsflow xml file for viapoint definitions
              * @param viapoints_file_path path to the cardsflow.xml file
@@ -165,50 +181,50 @@ namespace cardsflow {
              * @param res 3d resulting position of endeffector
              * @return success
              */
-            bool ForwardKinematicsService(roboy_middleware_msgs::ForwardKinematics::Request &req,
-                                          roboy_middleware_msgs::ForwardKinematics::Response &res);
+            bool ForwardKinematicsService(roboy_middleware::srv::ForwardKinematics::Request &req,
+                                          roboy_middleware_msgs::srv::ForwardKinematics::Response &res);
             /**
              * Inverse kinematic service for endeffectors
              * @param req endeffector and ik type
              * @param res joint configuration solution
              * @return success
              */
-            bool InverseKinematicsService(roboy_middleware_msgs::InverseKinematics::Request &req,
-                                          roboy_middleware_msgs::InverseKinematics::Response &res);
+            bool InverseKinematicsService(roboy_middleware_msgs::srv::InverseKinematics::Request &req,
+                                          roboy_middleware_msgs::srv::InverseKinematics::Response &res);
 
-            bool ExecuteIK(roboy_middleware_msgs::InverseKinematics::Request &req,
-                                          roboy_middleware_msgs::InverseKinematics::Response &res);
+            bool ExecuteIK(roboy_middleware_msgs::msg::InverseKinematics::Request &req,
+                                          roboy_middleware_msgs::msg::InverseKinematics::Response &res);
 
-            bool InverseKinematicsMultipleFramesService(roboy_middleware_msgs::InverseKinematicsMultipleFrames::Request &req,
-                                                        roboy_middleware_msgs::InverseKinematicsMultipleFrames::Response &res);
+            bool InverseKinematicsMultipleFramesService(roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames::Request &req,
+                                                        roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames::Response &res);
             
-            bool GetLinkPoseService(roboy_control_msgs::GetLinkPose::Request &req, 
-                                    roboy_control_msgs::GetLinkPose::Response &res);
+            bool GetLinkPoseService(roboy_control_msgs::msg::GetLinkPose::Request &req, 
+                                    roboy_control_msgs::msg::GetLinkPose::Response &res);
 
             /**
              * Callback for Interactive Marker Feedback of endeffectors. When the Interactive Marker is released in rviz,
              * the IK routine is called and the solution directly applied to the robot q_target angles
              * @param msg Interactive Marker Feedback message
              */
-            void InteractiveMarkerFeedback( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &msg);
+            void InteractiveMarkerFeedback( const visualization_msgs::msg::InteractiveMarkerFeedbackConstPtr &msg);
 
             /**
              * Callback for the joint state of the robot. This can come from gazebo, the real robot or else where.
              * @param msg message containing joint_name/angle information
              */
-            void JointState(const sensor_msgs::JointStateConstPtr &msg);
+            void JointState(const sensor_msgs::msg::JointStateConstPtr &msg);
 
             /**
              * Callback for the joint target of the robot.
              * @param msg message containing joint_name/angle information
              */
-            void JointTarget(const sensor_msgs::JointStateConstPtr &msg);
+            void JointTarget(const sensor_msgs::msg::JointStateConstPtr &msg);
 
             /**
              * Callback for the floating base world pose. This can come from gazebo, the real robot or else where.
              * @param msg message containing the 6 DoF pose of the floating base
              */
-            void FloatingBase(const geometry_msgs::PoseConstPtr &msg);
+            void FloatingBase(const geometry_msgs::msg::PoseConstPtr &msg);
 
             Matrix3d *link_to_link_transform;
 
@@ -223,29 +239,27 @@ namespace cardsflow {
             rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_pub;
             rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_pub;
             rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr cardsflow_joint_states_pub;
-            
             //ros::Publisher robot_state_target_pub, tendon_state_target_pub, joint_state_target_pub; /// target publisher
             rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr robot_state_target_pub;
             rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_target_pub;
             rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_target_pub;    
                     
             //ros::Subscriber controller_type_sub, joint_state_sub, joint_target_sub, floating_base_sub, interactive_marker_sub; /// ROS subscribers
-            //                      ????                        //not used
+            // controller_type_sub not used                     
             rclcpp::Subscription<std_msgs::msg::String>::SharedPtr controller_type_sub;
-
             rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub;
             rclcpp::Subscription<sensor_msgs::msg::JointStateConstPtr>::SharedPtr joint_target_sub;
             rclcpp::Subscription<geometry_msgs::msg::PoseConstPtr>::SharedPtr floating_base_sub;
-            rclcpp::Subscription<visualization_msgs::InteractiveMarkerFeedbackConstPtr>::SharedPtr interactive_marker_sub;            
+            rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerFeedbackConstPtr>::SharedPtr interactive_marker_sub;            
             
             //ros::ServiceServer ik_srv, ik_two_frames_srv, fk_srv, execute_ik_srv, link_pose_srv;
-            rclcpp::Service<roboy_middleware_msgs::InverseKinematics>::SharedPtr ik_srv;
-            rclcpp::Service<roboy_middleware_msgs::InverseKinematicsMultipleFrames>::SharedPtr ik_two_frames_srv;
-            rclcpp::Service<roboy_middleware_msgs::ForwardKinematics>::SharedPtr fk_srv;
-            rclcpp::Service<roboy_middleware_msgs::InverseKinematics>::SharedPtr execute_ik_srv;
-            rclcpp::Service<roboy_control_msgs::GetLinkPose>::SharedPtr link_pose_srv;
+            rclcpp::Service<roboy_middleware_msgs::srv::InverseKinematics>::SharedPtr ik_srv;
+            rclcpp::Service<roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames>::SharedPtr ik_two_frames_srv;
+            rclcpp::Service<roboy_middleware_msgs::srv::ForwardKinematics>::SharedPtr fk_srv;
+            rclcpp::Service<roboy_middleware_msgs::srv::InverseKinematics>::SharedPtr execute_ik_srv;
+            rclcpp::Service<roboy_control_msgs::srv::GetLinkPose>::SharedPtr link_pose_srv;
             
-            
+            //??????
             //map<string,boost::shared_ptr<actionlib::SimpleActionServer<roboy_control_msgs::MoveEndEffectorAction>>> moveEndEffector_as;
             map<string, shared_ptr<rclcpp_action::Server<roboy_control_msgs::action::MoveEndEffector>>> moveEndEffector_as;
 
@@ -309,7 +323,7 @@ namespace cardsflow {
             vector <VectorXd> joint_axis; /// joint axis of each joint
             vector <string> link_names, joint_names; /// link and joint names of the robot
             map<string, int> link_index, joint_index; /// link and joint indices of the robot
-            vector<ros::Publisher> joint_command_pub;
+            vector<rclcpp::Publisher> joint_command_pub;
             vector<int> controller_type; /// currently active controller type
             double integration_time =0; /// odeint integration time
             typedef boost::array< double , 2 > state_type; /// second order dynamics integration
@@ -320,7 +334,7 @@ namespace cardsflow {
             int qp_print_level = PL_NONE; /// qpoases print level
             SQProblem qp_solver; /// qpoases quadratic problem solver
             real_t *H, *g, *A, *lb, *ub, *b, *FOpt; /// quadratic problem variables
-            ros::Time last_visualization; /// timestamp for visualization at reasonable intervals
+            rclcpp::Time last_visualization; /// timestamp for visualization at reasonable intervals
             Eigen::IOFormat fmt; /// formator for terminal printouts
             hardware_interface::JointStateInterface joint_state_interface; /// ros control joint state interface
             hardware_interface::EffortJointInterface joint_command_interface; /// ros control joint command interface

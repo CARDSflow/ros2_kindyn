@@ -312,7 +312,7 @@ void Robot::init(string urdf_file_path, string viapoints_file_path, vector<strin
             pos = tf2::Vector3(pose.getVal(0,3),pose.getVal(1,3),pose.getVal(2,3));
         }
 
-        make6DofMarker(false,visualization_msgs::InteractiveMarkerControl::MOVE_3D,pos,false,0.15,"world",ef.c_str());
+        make6DofMarker(false,visualization_msgs::msg::InteractiveMarkerControl::MOVE_3D,pos,false,0.15,"world",ef.c_str());
 
 
     //???
@@ -320,7 +320,7 @@ void Robot::init(string urdf_file_path, string viapoints_file_path, vector<strin
     //
     //      
         moveEndEffector_as[ef].reset(
-                new actionlib::SimpleActionServer<roboy_control_msgs::MoveEndEffectorAction>(
+                new actionlib::SimpleActionServer<roboy_control_msgs::action::MoveEndEffectorAction>(
                         *(nh.get()), ("CARDSflow/MoveEndEffector/"+ef).c_str(),
                         boost::bind(&Robot::MoveEndEffector, this, _1), false));
         moveEndEffector_as[ef]->start();
@@ -345,29 +345,29 @@ void Robot::init(string urdf_file_path, string viapoints_file_path, vector<strin
       "/floating_base", 100, std::bind(&Robot::FloatingBase, this, std::placeholders::_1));
 
     //ik_srv = nh->advertiseService("/ik", &Robot::InverseKinematicsService, this);
-    ik_srv = node_->create_service<roboy_middleware_msgs::InverseKinematics>(
+    ik_srv = node_->create_service<roboy_middleware_msgs::srv::InverseKinematics>(
       "/ik", std::bind(&Robot::InverseKinematicsService, this, std::placeholders::_1, std::placeholders::_2));
 
     //execute_ik_srv = nh->advertiseService("/execute_ik",  &Robot::ExecuteIK, this);
-    execute_ik_srv = node_->create_service<roboy_middleware_msgs::InverseKinematics>(
+    execute_ik_srv = node_->create_service<roboy_middleware_msgs::srv::InverseKinematics>(
       "/execute_ik", std::bind(&Robot::ExecuteIK, this, std::placeholders::_1, std::placeholders::_2));
 
 
     //ik_two_frames_srv = nh->advertiseService("/ik_multiple_frames", &Robot::InverseKinematicsMultipleFramesService, this);
-    ik_two_frames_srv = node_->create_service<roboy_middleware_msgs::InverseKinematicsMultipleFrames>(
+    ik_two_frames_srv = node_->create_service<roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames>(
       "/ik_multiple_frames", std::bind(&Robot::InverseKinematicsMultipleFramesService, this, std::placeholders::_1, std::placeholders::_2));
 
     //fk_srv = nh->advertiseService("/fk", &Robot::ForwardKinematicsService, this);
-     fk_srv = node_->create_service<roboy_middleware_msgs::ForwardKinematics>(
+     fk_srv = node_->create_service<roboy_middleware_msgs::srv::ForwardKinematics>(
       "/fk", std::bind(&Robot::ForwardKinematicsService, this, std::placeholders::_1, std::placeholders::_2));
 
     
     //link_pose_srv = nh->advertiseService("/get_link_pose", &Robot::GetLinkPoseService, this);
-    link_pose_srv = node_->create_service<roboy_control_msgs::GetLinkPose>(
+    link_pose_srv = node_->create_service<roboy_control_msgs::msg::GetLinkPose>(
       "/get_link_pose", std::bind(&Robot::GetLinkPoseService, this, std::placeholders::_1, std::placeholders::_2));    
     
     //interactive_marker_sub = nh->subscribe("/interactive_markers/feedback",1,&Robot::InteractiveMarkerFeedback, this);
-    interactive_marker_sub = node_->create_subscription<visualization_msgs::InteractiveMarkerFeedbackConstPtr>(
+    interactive_marker_sub = node_->create_subscription<visualization_msgs::msg::InteractiveMarkerFeedbackConstPtr>(
       "/interactive_markers/feedback", 1, std::bind(&Robot::InteractiveMarkerFeedback, this, std::placeholders::_1));
 
 }
@@ -497,7 +497,7 @@ void Robot::update() {
 
     if ((1.0 / (rclcpp::Clock().now() - last_visualization).toSec()) < 30) {
         { // tendon state publisher
-            roboy_simulation_msgs::Tendon msg;
+            roboy_simulation_msgs::msg::Tendon msg;
             for (int i = 0; i < number_of_cables; i++) {
                 msg.name.push_back(cables[i].name);
                 msg.force.push_back(cable_forces[i]);
@@ -580,8 +580,8 @@ void Robot::update() {
             }
         }
         { // joint state publisher
-            sensor_msgs::JointState cf_msg;
-            roboy_simulation_msgs::JointState msg;
+            sensor_msgs::msg::JointState cf_msg;
+            roboy_simulation_msgs::msg::JointState msg;
             msg.names = joint_names;
             cf_msg.name = joint_names;
             for (int i = 1; i < number_of_links; i++) {
@@ -614,8 +614,8 @@ void Robot::update() {
 //    ROS_INFO_STREAM_THROTTLE(5, "cable_forces " << cable_forces.transpose().format(fmt));
 }
 
-bool Robot::ForwardKinematicsService(roboy_middleware_msgs::ForwardKinematics::Request &req,
-                                     roboy_middleware_msgs::ForwardKinematics::Response &res) {
+bool Robot::ForwardKinematicsService(roboy_middleware_msgs::srv::ForwardKinematics::Request &req,
+                                     roboy_middleware_msgs::srv::ForwardKinematics::Response &res) {
     if (ik_models.find(req.endeffector) == ik_models.end()) {
         RCLCPP_ERROR_STREAM(rclcpp::get_logger(), "endeffector " << req.endeffector << " not initialized");
         return false;
@@ -651,8 +651,8 @@ bool Robot::ForwardKinematicsService(roboy_middleware_msgs::ForwardKinematics::R
     return true;
 }
 
-bool Robot::InverseKinematicsService(roboy_middleware_msgs::InverseKinematics::Request &req,
-                                     roboy_middleware_msgs::InverseKinematics::Response &res) {
+bool Robot::InverseKinematicsService(roboy_middleware_msgs::srv::InverseKinematics::Request &req,
+                                     roboy_middleware_msgs::srv::InverseKinematics::Response &res) {
     if (ik_models.find(req.endeffector) == ik_models.end()) {
         RCLCPP_ERROR_STREAM(rclcpp::get_logger(),"endeffector " << req.endeffector << " not initialized");
         return false;
@@ -809,8 +809,8 @@ bool Robot::InverseKinematicsService(roboy_middleware_msgs::InverseKinematics::R
     }
 }
 
-bool Robot::InverseKinematicsMultipleFramesService(roboy_middleware_msgs::InverseKinematicsMultipleFrames::Request &req,
-                                                   roboy_middleware_msgs::InverseKinematicsMultipleFrames::Response &res) {
+bool Robot::InverseKinematicsMultipleFramesService(roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames::Request &req,
+                                                   roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames::Response &res) {
     if (ik_models.find(req.endeffector) == ik_models.end()) {
         RCLCPP_ERROR_STREAM(rclcpp::get_logger(),"endeffector " << req.endeffector << " not initialized");
         return false;
@@ -874,12 +874,12 @@ bool Robot::InverseKinematicsMultipleFramesService(roboy_middleware_msgs::Invers
     }
 }
 
-void Robot::InteractiveMarkerFeedback( const visualization_msgs::InteractiveMarkerFeedbackConstPtr &msg){
-    if(msg->event_type!=visualization_msgs::InteractiveMarkerFeedback::MOUSE_UP)
+void Robot::InteractiveMarkerFeedback( const visualization_msgs::msg::InteractiveMarkerFeedbackConstPtr &msg){
+    if(msg->event_type!=visualization_msgs::msg::InteractiveMarkerFeedback::MOUSE_UP)
         return;
     auto it = find(endeffectors.begin(),endeffectors.end(),msg->marker_name);
     if(it!=endeffectors.end()){
-        roboy_middleware_msgs::InverseKinematics msg2;
+        roboy_middleware_msgs::msg::InverseKinematics msg2;
         msg2.request.pose = msg->pose;
         msg2.request.endeffector = msg->marker_name;
         msg2.request.target_frame = msg->marker_name;
@@ -894,21 +894,12 @@ void Robot::InteractiveMarkerFeedback( const visualization_msgs::InteractiveMark
     }
 }
 
-bool Robot::ExecuteIK(roboy_middleware_msgs::InverseKinematics::Request &req,
-                        roboy_middleware_msgs::InverseKinematics::Response &res) {
-  auto it = find(endeffectors.begin(),endeffectors.end(),req.endeffector);
-  if(it!=endeffectors.end() && InverseKinematicsService(req, res)) {
-    int index = endeffector_index[req.endeffector];
-    for(int i=0;i<res.joint_names.size();i++){
-        q_target[joint_index[res.joint_names[i]]] = res.angles[i];
-    }
-    return true;
-  }
-  return false;
+
+
 }
 
-bool Robot::GetLinkPoseService(roboy_control_msgs::GetLinkPose::Request &req, 
-                                    roboy_control_msgs::GetLinkPose::Response &res) {
+bool Robot::GetLinkPoseService(roboy_control_msgs::srv::GetLinkPose::Request &req, 
+                                    roboy_control_msgs::srv::GetLinkPose::Response &res) {
     for (int i = 0; i < number_of_links; i++) {
         
         if (req.link_name == link_names[i]) {
@@ -922,7 +913,7 @@ bool Robot::GetLinkPoseService(roboy_control_msgs::GetLinkPose::Request &req,
 
 }
 
-void Robot::JointState(const sensor_msgs::JointStateConstPtr &msg) {
+void Robot::JointState(const sensor_msgs::msg::JointStateConstPtr &msg) {
 
     // if (initialized) {
       const iDynTree::Model &model = kinDynComp.getRobotModel();
@@ -945,7 +936,7 @@ void Robot::JointState(const sensor_msgs::JointStateConstPtr &msg) {
 
 }
 
-void Robot::JointTarget(const sensor_msgs::JointStateConstPtr &msg){
+void Robot::JointTarget(const sensor_msgs::msg::JointStateConstPtr &msg){
     const iDynTree::Model &model = kinDynComp.getRobotModel();
     int i = 0;
     for (string joint:msg->name) {
@@ -974,9 +965,9 @@ void Robot::FloatingBase(const geometry_msgs::msg::PoseConstPtr &msg) {
     world_H_base = iso.matrix();
 }
 
-void Robot::MoveEndEffector(const roboy_control_msgs::MoveEndEffectorGoalConstPtr &goal){
-    roboy_control_msgs::MoveEndEffectorFeedback feedback;
-    roboy_control_msgs::MoveEndEffectorResult result;
+void Robot::MoveEndEffector(const roboy_control_msgs::action::MoveEndEffectorGoalConstPtr &goal){
+    roboy_control_msgs::action::MoveEndEffectorFeedback feedback;
+    roboy_control_msgs::action::MoveEndEffectorResult result;
     bool success = true, timeout = false;
 
     double error = 10000;
@@ -995,7 +986,7 @@ void Robot::MoveEndEffector(const roboy_control_msgs::MoveEndEffectorGoalConstPt
 
 //    moveEndEffector_as[casp]->acceptNewGoal();
 
-    roboy_middleware_msgs::InverseKinematics srv;
+    roboy_middleware_msgs::srv::InverseKinematics srv;
     srv.request.type = goal->ik_type;
     srv.request.target_frame = goal->target_frame;
     srv.request.endeffector = goal->endeffector;
@@ -1036,7 +1027,7 @@ void Robot::MoveEndEffector(const roboy_control_msgs::MoveEndEffectorGoalConstPt
             if (InverseKinematicsService(srv.request, srv.response)) {
                 ik_solution_available = true;
                 int j =0;
-                std_msgs::Float32 msg;
+                std_msgs::msg::Float32 msg;
                 for (int i = offset; i < offset+endeffector_number_of_dofs[endeffector_index[goal->endeffector]]; i++) {
                     msg.data = srv.response.angles[j];
                     joint_command_pub[i]->publish(msg);

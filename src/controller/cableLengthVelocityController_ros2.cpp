@@ -32,9 +32,11 @@
 #include <pluginlib/class_list_macros.h>
 #include "kindyn/robot.hpp"
 #include "kindyn/controller/cardsflow_state_interface.hpp"
-#include <roboy_simulation_msgs/ControllerType.h>
-#include <std_msgs/Float32.h>
-#include <roboy_control_msgs/SetControllerParameters.h>
+// #include <roboy_simulation_msgs/ControllerType.h>
+#include <roboy_simulation_msgs/msg/ControllerType.h>
+#include <std_msgs/msg/Float32.h>
+// #include <roboy_control_msgs/SetControllerParameters.h>
+#include <roboy_control_msgs/srv/SetControllerParameters.h>
 
 #include "rclcpp/rclcpp.hpp"
 using namespace std;
@@ -53,29 +55,29 @@ public:
      * @return success
      */
     bool init(hardware_interface::CardsflowCommandInterface *hw, rclcpp::Node::SharedPtr node) {
-        nh = node;
+        node_ = node;
         // get joint name from the parameter server
-        if (!nh->get_parameter("joint", joint_name)) {
+        if (!node_->get_parameter("joint", joint_name)) {
             //ROS_ERROR   
-            RCLCPP_ERROR(nh->get_logger(), "No joint given (namespace: %s)", nh->get_namespace().c_str());
+            RCLCPP_ERROR(node_->get_logger(), "No joint given (namespace: %s)", node_->get_namespace().c_str());
             return false;
         }
 
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
 
-        controller_state = nh->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
+        controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
         rclcpp::Rate r(10);
 
         while(controller_state->getNumSubscribers()==0) // we wait until the controller state is available
             r.sleep();
         joint = hw->getHandle(joint_name); // throws on failure
         joint_index = joint.getJointIndex();
-        last_update = nh->now();
-        joint_command = nh->create_subscription<std_msgs::msg::Float32>(joint_name + "/target", 10, 
+        last_update = node_->now();
+        joint_command = node_->create_subscription<std_msgs::msg::Float32>(joint_name + "/target", 10, 
             std::bind(&CableLengthController::JointPositionCommand, this, std::placeholders::_1));
         
-        controller_parameter_srv = nh->create_service<roboy_control_msgs::srv::SetControllerParameters>
+        controller_parameter_srv = node_->create_service<roboy_control_msgs::srv::SetControllerParameters>
         (joint_name + "/params", 
         std::bind(&CableLengthVelocityController::setControllerParameters,
          this, std::placeholders::_1, std::placeholders::_2));  
@@ -107,8 +109,8 @@ public:
      * @param time current time
      */
     void starting(const rclcpp::Time &time) {
-        RCLCPP_WARN(nh->get_logger(),"cable velocity controller started for %s with index %d", joint_name.c_str(), joint_index);
-        roboy_simulation_msgs::ControllerType msg;
+        RCLCPP_WARN(node_->get_logger(),"cable velocity controller started for %s with index %d", joint_name.c_str(), joint_index);
+        roboy_simulation_msgs::msg::ControllerType msg;
         msg.joint_name = joint_name;
         msg.type = CARDSflow::ControllerType::cable_length_controller;
         controller_state->publish(msg);
@@ -119,7 +121,7 @@ public:
      */
 
     void stopping(const rclcpp::Time &time) {
-    RCLCPP_WARN(nh->get_logger(), "cable velocity controller stopped for %s", joint_name.c_str());
+    RCLCPP_WARN(node_->get_logger(), "cable velocity controller stopped for %s", joint_name.c_str());
 }
 
 
@@ -128,7 +130,7 @@ public:
      * Joint position command callback for this joint
      * @param msg joint position target in radians
      */
-    void JointVelocityCommand(const std_msgs::Float32ConstPtr &msg){
+    void JointVelocityCommand(const std_msgs::msg::Float32ConstPtr &msg){
         joint.setJointVelocityCommand(msg->data);
     }
 
@@ -139,8 +141,8 @@ public:
      * @return success
      */                                     
                                                 //::srv::??
-    bool setControllerParameters( roboy_control_msgs::SetControllerParameters::Request &req,
-                                  roboy_control_msgs::SetControllerParameters::Response &res){
+    bool setControllerParameters( roboy_control_msgs::srv::SetControllerParameters::Request &req,
+                                  roboy_control_msgs::srv::SetControllerParameters::Response &res){
         Kp = req.kp;
         Kd = req.kd;
         res.success = true;
@@ -149,7 +151,7 @@ public:
 private:
     double Kp = 0.1, Kd = 0; /// PD gains
     double p_error_last = 0; /// last error
-    rclcpp::Node::SharedPtr nh; /// ROS2 node
+    rclcpp::Node::SharedPtr node_; /// ROS2 node
     rclcpp::Publisher<roboy_simulation_msgs::msg::ControllerType>::SharedPtr controller_state;/// publisher for controller state
     rclcpp::Service<rclcpp::srv::SetParameters>::SharedPtr controller_parameter_srv; /// service for controller parameters
     

@@ -19,21 +19,42 @@
 #include "kindyn/controller/cardsflow_state_interface.hpp"
 #include "kindyn/controller/cardsflow_command_interface.hpp"
 
-#include <geometry_msgs/PoseStamped.h>
-#include <geometry_msgs/Vector3.h>
-#include <std_msgs/Float32.h>
-#include <std_srvs/Trigger.h>
-#include <sensor_msgs/JointState.h>
-#include <roboy_simulation_msgs/Tendon.h>
-#include <roboy_simulation_msgs/ControllerType.h>
-#include <roboy_simulation_msgs/JointState.h>
-#include <roboy_middleware_msgs/ForwardKinematics.h>
-#include <roboy_middleware_msgs/InverseKinematics.h>
-#include <roboy_middleware_msgs/InverseKinematicsMultipleFrames.h>
-#include <roboy_middleware_msgs/MotorCommand.h>
-#include <roboy_middleware_msgs/MotorStatus.h>
-#include <roboy_control_msgs/MoveEndEffectorAction.h>
-#include <roboy_control_msgs/Strings.h>
+// #include <geometry_msgs/PoseStamped.h>
+// #include <geometry_msgs/Vector3.h>
+// #include <std_msgs/Float32.h>
+// #include <std_srvs/Trigger.h>
+// #include <sensor_msgs/JointState.h>
+
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/vector3.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <std_srvs/srv/trigger.hpp>
+#include <sensor_msgs/msg/joint_state.hpp>
+
+
+// #include <roboy_simulation_msgs/Tendon.h>
+// #include <roboy_simulation_msgs/ControllerType.h>
+// #include <roboy_simulation_msgs/JointState.h>
+// #include <roboy_middleware_msgs/ForwardKinematics.h>
+// #include <roboy_middleware_msgs/InverseKinematics.h>
+// #include <roboy_middleware_msgs/InverseKinematicsMultipleFrames.h>
+// #include <roboy_middleware_msgs/MotorCommand.h>
+// #include <roboy_middleware_msgs/MotorStatus.h>
+// #include <roboy_control_msgs/MoveEndEffectorAction.h>
+// #include <roboy_control_msgs/Strings.h>
+
+#include <roboy_simulation_msgs/msg/Tendon.h>
+#include <roboy_simulation_msgs/msg/ControllerType.h>
+#include <roboy_simulation_msgs/msg/JointState.h>
+#include <roboy_middleware_msgs/srv/ForwardKinematics.h>
+#include <roboy_middleware_msgs/srv/InverseKinematics.h>
+#include <roboy_middleware_msgs/srv/InverseKinematicsMultipleFrames.h>
+#include <roboy_middleware_msgs/msg/MotorCommand.h>
+#include <roboy_middleware_msgs/msg/MotorStatus.h>
+#include <roboy_control_msgs/action/MoveEndEffectorAction.h>
+#include <roboy_control_msgs/msg/Strings.h>
+
+
 
 // #include <tf/tf.h>
 // #include <tf/transform_broadcaster.h>
@@ -54,7 +75,6 @@
 #include <hardware_interface/robot_hw.h>
 
 #include <boost/numeric/odeint.hpp>
-
 #include <common_utilities/rviz_visualization.hpp>
 #include <visualization_msgs/InteractiveMarkerFeedback.h>
 #include <thread>
@@ -95,15 +115,15 @@ namespace cardsflow {
              * This is the read function and should implement reading the state of your robot
              */
             virtual void read(){
-                                        // this
-                ROS_WARN_STREAM_THROTTLE(this->get_logger(), "reading virtual, "
+                                        
+                RCLCPP_WARN_STREAM_THROTTLE(rclcpp::get_logger(), *rclcpp::get_clock(), std::chrono::seconds(1), "reading virtual, "
                                             "you probably forgot to implement your own read function?!");
             };
             /**
              * This is the write function and should implement writing commands to your robot
              */
             virtual void write(){
-                ROS_WARN_STREAM_THROTTLE(this->get_logger(), "writing virtual, "
+                RCLCPP_WARN_STREAM_THROTTLE(rclcpp::get_logger(), *rclcpp::get_clock(), std::chrono::seconds(1), "writing virtual, "
                                             "you probably forgot to implement your own write function?!");
             };
 
@@ -118,18 +138,18 @@ namespace cardsflow {
              * Callback for the joint state of the robot. This can come from gazebo, the real robot or else where.
              * @param msg message containing joint_name/angle information
              */
-            void JointState(const sensor_msgs::JointStateConstPtr &msg);
+            void JointState(const sensor_msgs::msg::JointStateConstPtr &msg);
 
-            void JointTarget(const sensor_msgs::JointStateConstPtr &msg);
+            void JointTarget(const sensor_msgs::msg::JointStateConstPtr &msg);
 
             /**
              * Callback for controller type change. The controller type defines how the forwardKinematics function
              * integrates the robot states
              * @param msg message containing the joint_name/type pair
              */
-            void controllerType(const roboy_simulation_msgs::ControllerTypeConstPtr &msg);
-            void ZeroJoints(const roboy_control_msgs::StringsPtr &msg);
-            bool FreezeService(std_srvs::Trigger::Request &req,std_srvs::Trigger::Response &res);
+            void controllerType(const roboy_simulation_msgs::msg::ControllerTypeConstPtr &msg);
+            void ZeroJoints(const roboy_control_msgs::msg::StringsPtr &msg);
+            bool FreezeService(std_srvs::srv::Trigger::Request &req,std_srvs::srv::Trigger::Response &res);
 
             cardsflow::kindyn::Kinematics kinematics;
             // ros::NodeHandlePtr nh; /// ROS node handle
@@ -141,39 +161,33 @@ namespace cardsflow {
             hardware_interface::CardsflowCommandInterface cardsflow_command_interface; /// cardsflow command interface
             vector<int> controller_type; /// currently active controller type
             
-            //vrpuppet.cpp
-            rclcpp::Publisher<geometry_msgs::PoseStamped>::SharedPtr robot_state_pub; /// ROS robot pose and tendon publisher
-            rclcpp::Publisher<roboy_simulation_msgs::Tendon>::SharedPtr tendon_state_pub; /// ROS robot pose and tendon publisher
-            //                 msg type?
-            //rclcpp::Publisher<>::SharedPtr tendon_ext_state_pub; /// ROS robot pose and tendon publisher
-            rclcpp::Publisher<roboy_simulation_msgs::JointState>::SharedPtr joint_state_pub; /// ROS robot pose and tendon publisher             
-            rclcpp::Publisher<sensor_msgs::JointState>::SharedPtr cardsflow_joint_states_pub; /// ROS robot pose and tendon publisher
-            
-            //robot.cpp
-            rclcpp::Publisher<geometry_msgs::PoseStamped>::SharedPtr robot_state_target_pub; /// target publisher
-            rclcpp::Publisher<roboy_simulation_msgs::Tendon>::SharedPtr tendon_state_target_pub; /// target publisher
-            rclcpp::Publisher<roboy_simulation_msgs::JointState>::SharedPtr joint_state_target_pub; /// target publisher
-
+            //ros::Publisher robot_state_pub, tendon_state_pub, tendon_ext_state_pub, joint_state_pub, cardsflow_joint_states_pub; /// ROS robot pose and tendon publisher
+            rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr robot_state_pub; /// ROS robot pose and tendon publisher
+            rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_pub; /// ROS robot pose and tendon publisher                
+            rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_ext_state_pub; /// ROS robot pose and tendon publisher
+            rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_pub; /// ROS robot pose and tendon publisher             
+            rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr cardsflow_joint_states_pub; /// ROS robot pose and tendon publisher
+            //ros::Publisher robot_state_target_pub, tendon_state_target_pub, joint_state_target_pub; /// target publisher
+            rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr robot_state_target_pub; /// target publisher
+            rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_target_pub; /// target publisher
+            rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_target_pub; /// target publisher           
             
             
             //ros::Subscriber controller_type_sub, joint_state_sub, floating_base_sub, interactive_marker_sub, joint_target_sub, zero_joints_sub; /// ROS subscribers
-            //robot.cpp
-            rclcpp::Subscription<roboy_simulation_msgs::ControllerTypeConstPtr>::SharedPtr controller_type_sub;
-            rclcpp::Subscription<sensor_msgs::JointStateConstPtr>::SharedPtr joint_state_sub;
-            // unknown
-            //rclcpp::Subscription<>::SharedPtr floating_base_sub;
-            //rclcpp::Subscription<>::SharedPtr interactive_marker_sub;
-            rclcpp::Subscription<sensor_msgs::JointStateConstPtr>::SharedPtr joint_target_sub;
-            rclcpp::Subscription<roboy_control_msgs::StringsPtr>::SharedPtr zero_joints_sub;
+            rclcpp::Subscription<roboy_simulation_msgs::msg::ControllerTypeConstPtr>::SharedPtr controller_type_sub;
+            rclcpp::Subscription<sensor_msgs::msg::JointStateConstPtr>::SharedPtr joint_state_sub;
+            // floating_base_sub,interactive_marker_sub not used in robot.cpp but in vrpuppet.cpp
+            rclcpp::Subscription<geometry_msgs::msg::PoseConstPtr>::SharedPtr floating_base_sub;
+            rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerFeedbackConstPtr>::SharedPtr interactive_marker_sub;
+            rclcpp::Subscription<sensor_msgs::msg::JointStateConstPtr>::SharedPtr joint_target_sub;
+            rclcpp::Subscription<roboy_control_msgs::msg::StringsPtr>::SharedPtr zero_joints_sub;
 
             
-
-            // ros::ServiceServer ik_srv, ik_two_frames_srv, fk_srv, freeze_srv; ??
             //rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr ik_srv, ik_two_frames_srv, fk_srv, freeze_srv;
             //vrpuppet
-            rclcpp::Service<roboy_middleware_msgs::InverseKinematics>::SharedPtr ik_srv;
-            rclcpp::Service<roboy_middleware_msgs::InverseKinematicsMultipleFrames>::SharedPtr ik_two_frames_srv;
-            rclcpp::Service<roboy_middleware_msgs::ForwardKinematics>::SharedPtr fk_srv;
+            rclcpp::Service<roboy_middleware_msgs::srv::InverseKinematics>::SharedPtr ik_srv;
+            rclcpp::Service<roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames>::SharedPtr ik_two_frames_srv;
+            rclcpp::Service<roboy_middleware_msgs::srv::ForwardKinematics>::SharedPtr fk_srv;
             rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr freeze_srv;
             string topic_root;
 
