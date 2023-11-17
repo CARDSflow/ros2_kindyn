@@ -31,6 +31,7 @@
 #include "controller_interface/controller_interface.hpp"
 
 // #include <hardware_interface/joint_command_interface.h>
+//??? no joint_command_interface in hardware_interface package of ROS2
 #include <hardware_interface/loaned_command_interface.hpp>
 
 #include <pluginlib/class_list_macros.h>
@@ -49,6 +50,7 @@
 using namespace std;
 using namespace Eigen;
 
+//?? not sure if ForcePositionController should inheri from rclcpp::Node
 class ForcePositionController : public controller_interface::ControllerInterface, rclcpp::Node{
 public:
     /**
@@ -69,6 +71,9 @@ public:
             RCLCPP_ERROR(node_->get_logger(), "No joint given (namespace: %s)", std::string(node_->get_namespace()));
             return false;
         }
+
+        //not needed 
+        // In ROS2, spinners are replaced by executors
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
 
@@ -79,11 +84,10 @@ public:
         while(controller_state->get_subscription_count()==0) // we wait until the controller state is available
             r.sleep();
 
-                    
+        // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
         // joint = hw->getHandle(joint_name); // throws on failure
+
         // joint_command = nh.subscribe((joint_name+"/target").c_str(),1,&ForcePositionController::JointPositionCommand, this);
-        
-        
         joint_command = node_->create_subscription<std_msgs::msg::Float32>(
             std::string(joint_name+"/target"), 
             1, 
@@ -91,12 +95,6 @@ public:
         joint_index = joint.getJointIndex();
         
         // controller_parameter_srv = nh.advertiseService((joint_name+"/params").c_str(),& ForcePositionController::setControllerParameters, this);
-        // controller_parameter_srv = node_->create_service<roboy_control_msgs::srv::SetControllerParameters>(
-        //      std::string(joint_name+"/params"),
-        //      1,
-        //      std::bind(&ForcePositionController::setControllerParameters, this, std::placeholders::_1, std::placeholders::_2)
-             
-        // );
         controller_parameter_srv = node_->create_service<roboy_control_msgs::srv::SetControllerParameters>
         ( std::string(joint_name + "/params"), 
         std::bind(&ForcePositionController::setControllerParameters,
@@ -176,6 +174,7 @@ private:
     hardware_interface::CardsflowHandle joint; /// cardsflow joint handle for access to joint/cable model state
     // ros::Subscriber joint_command; /// joint command subscriber
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr joint_command; /// joint command subscriber
+    
     string joint_name; /// name of the controlled joint
     int joint_index;
 };

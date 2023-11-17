@@ -18,15 +18,18 @@ namespace hardware_interface
     {
         if (!pos)
         {   //      HardwareInterfaceException ROS2 Exccptions
+            //??? No HardwareInterfaceException in ROS2
             throw std::runtime_error("Cannot create handle '" + name + "'. Position data pointer is null.");
         }
         if (!vel)
         {   //      HardwareInterfaceException
+            //??? No HardwareInterfaceException in ROS2
             throw std::runtime_error("Cannot create handle '" + name + "'. Velocity data pointer is null.");
         }
         if (!acc)
         {
             // throw HardwareInterfaceException("Cannot create handle '" + name + "'. Acceleration data pointer is null.");
+            //??? No HardwareInterfaceException in ROS2
             throw std::runtime_error("Cannot create handle '" + name + "'. Acceleration data pointer is null.");
         }
     }

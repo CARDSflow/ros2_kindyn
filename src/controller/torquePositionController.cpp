@@ -31,11 +31,16 @@
 #include "controller_interface/controller_interface.hpp"
 
 // #include <hardware_interface/joint_command_interface.h>
-#include <hardware_interface/loaned_command_interface.hpp>// not sure
+//??? no joint_command_interface in hardware_interface package of ROS2
+#include <hardware_interface/loaned_command_interface.hpp>
 
 #include <pluginlib/class_list_macros.hpp>
+
 // #include "kindyn/robot.hpp"
+
 #include "kindyn/controller/cardsflow_command_interface.hpp"
+#include "kindyn/controller/cardsflow_command_interface.hpp"
+
 // #include <roboy_simulation_msgs/ControllerType.h>
 #include "roboy_simulation_msgs/msg/controller_type.hpp"
 #include <std_msgs/msg/float32.hpp>
@@ -67,14 +72,18 @@ public:
             return false;
         }
 
+        //not needed 
+        // In ROS2, spinners are replaced by executors
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
+
         // controller_state = nh.advertise<roboy_simulation_msgs::ControllerType>("/controller_type",1);
         controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
         rclcpp::Rate r(10);
         while(controller_state->get_subscription_count()==0) // we wait until the controller state is available
             r.sleep();
 
+        // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
         // joint = hw->getHandle(joint_name); // throws on failure
 
         // joint_command = nh.subscribe((joint_name+"/target").c_str(),1,&TorquePositionController::JointCommand, this);
@@ -83,8 +92,6 @@ public:
             10,
             std::bind(&TorquePositionController::JointCommand,this,std::placeholders::_1)
         );
-
-
 
         // controller_parameter_srv = nh.advertiseService((joint_name+"/params").c_str(),& TorquePositionController::setControllerParameters, this);
         controller_parameter_srv = node_->create_service<roboy_control_msgs::srv::SetControllerParameters>(
@@ -107,10 +114,11 @@ public:
         double p_error = q - q_target;
         double cmd = Kp * p_error + Kd *qd;
 
-        //?????
-
+        //??? class "hardware_interface::CardsflowHandle" has no member "setCommand"
         // joint.setCommand(cmd);
-//        ROS_INFO_THROTTLE(1, "%s target %lf current %lf", joint_name.c_str(), q_target, q);
+        // ROS_INFO_THROTTLE(1, "%s target %lf current %lf", joint_name.c_str(), q_target, q);
+        RCLCPP_INFO(node_->get_logger(), "%s target %lf current %lf", joint_name.c_str(), q_target, q);
+
     }
 
     /**
@@ -163,7 +171,7 @@ private:
     rclcpp::Service<roboy_control_msgs::srv::SetControllerParameters>::SharedPtr controller_parameter_srv; /// service for controller parameters
     // boost::shared_ptr<ros::AsyncSpinner> spinner;
     
-    //？？
+    //??? ROS2 has no hardware_interface::JointHandle 
     // hardware_interface::JointHandle joint;
     hardware_interface::CardsflowHandle joint; /// cardsflow joint handle for access to joint/cable model state
 

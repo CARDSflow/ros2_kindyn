@@ -33,7 +33,8 @@
 
 
 //#include <hardware_interface/joint_command_interface.h>  find functions
-#include <hardware_interface/loaned_command_interface.hpp>// not sure
+//??? no joint_command_interface in hardware_interface package of ROS2
+#include <hardware_interface/loaned_command_interface.hpp>
 
 #include <pluginlib/class_list_macros.hpp>
 
@@ -62,6 +63,7 @@ double wrap_pos_neg_pi(double angle)
     return fmod(angle + M_PI, M_2PI) - M_PI;
 }
 // class CableLengthController : public controller_interface::Controller<hardware_interface::CardsflowCommandInterface>
+//?? not sure if CableLengthController should inheri from rclcpp::Node
 class CableLengthController : public controller_interface::ControllerInterface , rclcpp::Node{
 public:
     /**
@@ -95,11 +97,12 @@ public:
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
 
-        //controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
-        controller_state = [this]() {
-            return node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
-        }();
+        controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
         
+        // controller_state = [this]() {
+        //     return node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
+        // }();
+
         rclcpp::Rate r(10);
 
 
@@ -107,7 +110,7 @@ public:
             r.sleep();
 
 
-        // ?????
+        // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
         // joint = hw->getHandle(joint_name); // throws on failure
         // joint = hw->claim_command_interface(joint_name);
 
@@ -181,21 +184,14 @@ private:
     //ros::Publisher controller_state; /// publisher for controller state
     rclcpp::Publisher<roboy_simulation_msgs::msg::ControllerType>::SharedPtr controller_state;/// publisher for controller state
    
-
     // ros::ServiceServer controller_parameter_srv; /// service for controller parameters
-    //                 type not sure, because controller_parameter_srv has not been used so far 
-    // rclcpp::Service<rclcpp::srv::SetParameters>::SharedPtr controller_parameter_srv; /// service for controller parameters
-
+    rclcpp::Service<roboy_control_msgs::srv::SetControllerParameters>::SharedPtr controller_parameter_srv;
 
     // spinner is intergrated into ROS2 Node
     //boost::shared_ptr<ros::AsyncSpinner> spinner; /// ROS async spinner
 
-    
-
     hardware_interface::CardsflowHandle joint; /// cardsflow joint handle for access to joint/cable model state
     
-
-
     // ros::Subscriber joint_command; /// joint command subscriber
     //                     type of template parameters not sure, here is consistent with JointPositionCommand
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr joint_command; /// joint command subscriber

@@ -31,6 +31,7 @@
 #include "controller_interface/controller_interface.hpp"
 
 // #include <hardware_interface/joint_command_interface.h>
+//??? no joint_command_interface in hardware_interface package of ROS2
 #include <hardware_interface/loaned_command_interface.hpp>
 
 #include <pluginlib/class_list_macros.hpp>
@@ -51,6 +52,8 @@
 using namespace std;
 
 // class CableLengthVelocityController : public controller_interface::Controller<hardware_interface::CardsflowCommandInterface> {
+//?? not sure if CableLengthVelocityController should inheri from rclcpp::Node
+
 class CableLengthVelocityController : public controller_interface::ControllerInterface, rclcpp::Node {
 public:
     /**
@@ -73,51 +76,35 @@ public:
             return false;
         }
 
+        //not needed 
+        // In ROS2, spinners are replaced by executors
+        // Executors should be created outside of the class and spin should be called in a separate thread if needed
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
+
         controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
         rclcpp::Rate r(10);
 
         while(controller_state->get_subscription_count()==0) // we wait until the controller state is available
             r.sleep();
 
+        // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
         // joint = hw->getHandle(joint_name); // throws on failure
 
         joint_index = joint.getJointIndex();
         last_update = node_->now();
-
-        // controller_statee = this->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
-        //joint_command = node_->create_subscription<std_msgs::msg::Float32>(std::string(joint_name+"/target"), 1, std::bind(&CableLengthVelocityController::JointVelocityCommand, this, std::placeholders::_1));
-        joint_command = [this]() {
-            return node_->create_subscription<std_msgs::msg::Float32>(
-                std::string(joint_name+"/target"), 1,
-                [this](const std_msgs::msg::Float32::SharedPtr msg) {
-                    this->JointVelocityCommand(msg);
-                }
-            );
-        }();
-
         
-        // joint_command = node_->create_subscription<std_msgs::msg::Float32>("test", 10, std::bind(&CableLengthVelocityController::JointVelocityCommand, this, std::placeholders::_1));
-        // joint_command = node_->create_subscription<std_msgs::msg::Float32>((joint_name+"/target").c_str(),1,
-        //                                         std::bind(&CableLengthVelocityController::JointVelocityCommand, this, std::placeholders::_1));
-        // joint_command = node_->create_subscription<std_msgs::msg::Float32>(joint_name + "/target", 10, 
-        // std::bind(&CableLengthVelocityController::JointVelocityCommand, this, std::placeholders::_1));
-        
-        controller_parameter_srv = [this](){
-            return node_->create_service<roboy_control_msgs::srv::SetControllerParameters>(
-                std::string(joint_name + "/params"),
-                [this](roboy_control_msgs::srv::SetControllerParameters::Request ::SharedPtr req,
-                        roboy_control_msgs::srv::SetControllerParameters::Response ::SharedPtr res){
-                    this->setControllerParameters(req,res);
-                }
-            );
-            }();
+        // joint_command = nh.subscribe((joint_name+"/target").c_str(),1,&CableLengthVelocityController::JointVelocityCommand, this);
+        joint_command = node_->create_subscription<std_msgs::msg::Float32>
+        (std::string(joint_name+"/target"), 1, 
+        std::bind(&CableLengthVelocityController::JointVelocityCommand, this, std::placeholders::_1));
 
-        // controller_parameter_srv = node_->create_service<roboy_control_msgs::srv::SetControllerParameters>
-        // (joint_name + "/params", 
-        // std::bind(&CableLengthVelocityController::setControllerParameters,
-        //  this, std::placeholders::_1, std::placeholders::_2));  
+        // controller_parameter_srv = nh.advertiseService((joint_name+"/params").c_str(),& CableLengthVelocityController::setControllerParameters, this);
+        controller_parameter_srv = node_->create_service<roboy_control_msgs::srv::SetControllerParameters>
+        (joint_name + "/params", 
+        std::bind(&CableLengthVelocityController::setControllerParameters,
+         this, std::placeholders::_1, std::placeholders::_2));  
+        
         return true;
     }
 

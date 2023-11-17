@@ -30,5 +30,11 @@
 
   <export>
     <build_type>ament_cmake</build_type>
+    <controller_interface plugin="${prefix}/CableLengthController_plugin.xml"/>
+    <controller_interface plugin="${prefix}/CableLengthVelocityController_plugin.xml"/>
+    <controller_interface plugin="${prefix}/TorquePositionController_plugin.xml"/>
+    <controller_interface plugin="${prefix}/ForcePositionController_plugin.xml"/>
   </export>
+
 </package>
+
