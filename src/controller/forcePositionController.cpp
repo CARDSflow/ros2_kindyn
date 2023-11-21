@@ -51,12 +51,12 @@ using namespace std;
 using namespace Eigen;
 
 //?? not sure if ForcePositionController should inheri from rclcpp::Node
-class ForcePositionController : public controller_interface::ControllerInterface, rclcpp::Node{
+class ForcePositionController : public controller_interface::ControllerInterface{
 public:
     /**
      * Constructor
      */
-    ForcePositionController():Node("ForcePositionController") {};
+    ForcePositionController() {};
 
     /**
      * Initializes the controller. Will be call by controller_manager when loading this controller
@@ -85,7 +85,7 @@ public:
             r.sleep();
 
         // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
-        // joint = hw->getHandle(joint_name); // throws on failure
+        joint = hw->getHandle(joint_name); // throws on failure
 
         // joint_command = nh.subscribe((joint_name+"/target").c_str(),1,&ForcePositionController::JointPositionCommand, this);
         joint_command = node_->create_subscription<std_msgs::msg::Float32>(

@@ -174,7 +174,7 @@ void Robot::init(string urdf_file_path, string viapoints_file_path, vector<strin
         );
 
 
-        //???class "hardware_interface::CardsflowStateInterface" has no member "registerHandle"
+        //???class "hardware_interface::CardsflowStateInterface" has no member "registerHandle" in ROS1
         // cardsflow_state_interface.registerHandle(state_handle);
 
         //??? no getHandle in cardsflow_state_interface  and no registerHandle in cardsflow_command_interface
@@ -185,7 +185,7 @@ void Robot::init(string urdf_file_path, string viapoints_file_path, vector<strin
         // cardsflow_command_interface.registerHandle(pos_handle);
     }
     //??? cannot find registerInterface
-    // registerInterface(&cardsflow_command_interface);
+    //registerInterface(&cardsflow_command_interface);
 
     /**
      * Initialize at zero for simulation

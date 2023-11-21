@@ -121,6 +121,17 @@ endif()
 # add_dependencies(CardsflowHardwareInterface roboy_middleware_msgs_generate_messages_cpp)
 # target_link_libraries(CardsflowHardwareInterface ${catkin_LIBRARIES})
 
+
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
+ament_export_include_directories(
+  include
+)
+
+
+
 # ROS2
 # CARDSflow hardware interface
 add_library(CardsflowHardwareInterface
@@ -149,9 +160,11 @@ ament_target_dependencies(CableLengthController
   "controller_interface"
   "roboy_simulation_msgs"
   "roboy_control_msgs"
+  "roboy_middleware_msgs"
   "hardware_interface"
+
   )
-install(TARGETS CableLengthController
+install(TARGETS CableLengthController 
     DESTINATION lib/${PROJECT_NAME})
 
 
@@ -169,6 +182,7 @@ ament_target_dependencies(CableLengthVelocityController
   "roboy_simulation_msgs"
   "roboy_control_msgs"
   "hardware_interface"
+  "roboy_middleware_msgs"
   )
 install(TARGETS CableLengthVelocityController
     DESTINATION lib/${PROJECT_NAME})
@@ -188,6 +202,7 @@ ament_target_dependencies(TorquePositionController
   "roboy_simulation_msgs"
   "roboy_control_msgs"
   "hardware_interface"
+  "roboy_middleware_msgs"
   )
 install(TARGETS TorquePositionController
     DESTINATION lib/${PROJECT_NAME})
@@ -208,6 +223,7 @@ ament_target_dependencies(ForcePositionController
   "roboy_simulation_msgs"
   "roboy_control_msgs"
   "hardware_interface"
+  "roboy_middleware_msgs"
   )
 install(TARGETS ForcePositionController
     DESTINATION lib/${PROJECT_NAME})

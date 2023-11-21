@@ -49,17 +49,17 @@
 
 using namespace std;
 
-class TorquePositionController : public controller_interface::ControllerInterface,  rclcpp::Node {
+class TorquePositionController : public controller_interface::ControllerInterface {
 public:
     /**
      * Constructor
      */
-    TorquePositionController():Node("TorquePositionController") {};
+    TorquePositionController(){};
 
     /**
      * Initializes the controller. Will be call by controller_manager when loading this controller
      * @param hw pointer to the hardware interface
-     * @param n the nodehandle
+     * @param node the nodehandle
      * @return success
      */
     // bool init(hardware_interface::EffortJointInterface *hw, ros::NodeHandle &n) {
@@ -84,7 +84,7 @@ public:
             r.sleep();
 
         // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
-        // joint = hw->getHandle(joint_name); // throws on failure
+        joint = hw->getHandle(joint_name); // throws on failure
 
         // joint_command = nh.subscribe((joint_name+"/target").c_str(),1,&TorquePositionController::JointCommand, this);
         joint_command = node_->create_subscription<std_msgs::msg::Float32>(
@@ -174,7 +174,7 @@ private:
     //??? ROS2 has no hardware_interface::JointHandle 
     // hardware_interface::JointHandle joint;
     hardware_interface::CardsflowHandle joint; /// cardsflow joint handle for access to joint/cable model state
-
+    
     // ros::Subscriber joint_command; /// joint command subscriber
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr joint_command; /// joint command subscriber
     

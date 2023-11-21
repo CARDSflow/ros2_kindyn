@@ -27,4 +27,10 @@ namespace hardware_interface
     void CardsflowHandle::setJointPositionCommand(double cmd){*joint_position_cmd_ = cmd;}
     void CardsflowHandle::setJointVelocityCommand(double cmd){*joint_velocity_cmd_ = cmd;}
     void CardsflowHandle::setJointTorqueCommand(double cmd){*joint_torque_cmd_ = cmd;}
+    
+    hardware_interface::CardsflowHandle CardsflowCommandInterface::getHandle(const std::string& joint_name) {
+
+        hardware_interface::CardsflowHandle joint; 
+        return joint;
+    }
 }

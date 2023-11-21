@@ -359,8 +359,10 @@ void Robot::init(string urdf_file_path, string viapoints_file_path, vector<strin
     execute_ik_srv = node_->create_service<roboy_middleware_msgs::srv::InverseKinematics>(
       "/execute_ik", std::bind(&Robot::ExecuteIK, this, std::placeholders::_1, std::placeholders::_2));
 
-    //??? multipleFrame
+
     // ik_two_frames_srv = nh->advertiseService("/ik_multiple_frames", &Robot::InverseKinematicsMultipleFramesService, this);
+    ik_two_frames_srv = node_->create_service<roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames>(
+      "/ik_multiple_frames", std::bind(&Robot::InverseKinematicsMultipleFramesService, this, std::placeholders::_1, std::placeholders::_2));
 
     // fk_srv = nh->advertiseService("/fk", &Robot::ForwardKinematicsService, this);
     fk_srv = node_->create_service<roboy_middleware_msgs::srv::ForwardKinematics>(
@@ -848,71 +850,71 @@ bool Robot::InverseKinematicsService(roboy_middleware_msgs::srv::InverseKinemati
 }
 
 
-//????? How to deal with MultipleFrames
-// bool Robot::InverseKinematicsMultipleFramesService(roboy_middleware_msgs::InverseKinematicsMultipleFrames::Request &req,
-//                                                    roboy_middleware_msgs::InverseKinematicsMultipleFrames::Response &res) {
-//     if (ik_models.find(req.endeffector) == ik_models.end()) {
-//         ROS_ERROR_STREAM("endeffector " << req.endeffector << " not initialized");
-//         return false;
-//     }
-//     int index = endeffector_index[req.endeffector];
-//     iDynTree::VectorDynSize jointPos, jointVel;
-//     jointPos.resize(endeffector_number_of_dofs[index]);
-//     jointVel.resize(endeffector_number_of_dofs[index]);
-//     iDynTree::toEigen(jointPos) = q.segment(endeffector_dof_offset[index], endeffector_number_of_dofs[index]);
-//     iDynTree::toEigen(jointVel) = qd.segment(endeffector_dof_offset[index], endeffector_number_of_dofs[index]);
+bool Robot::InverseKinematicsMultipleFramesService(roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames::Request::SharedPtr req,
+                                                   roboy_middleware_msgs::srv::InverseKinematicsMultipleFrames::Response::SharedPtr res) {
+    if (ik_models.find(req->endeffector) == ik_models.end()) {
+        // ROS_ERROR_STREAM("endeffector " << req->endeffector << " not initialized");
+        RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "endeffector %s not initialized", req->endeffector.c_str());
+        return false;
+    }
+    int index = endeffector_index[req->endeffector];
+    iDynTree::VectorDynSize jointPos, jointVel;
+    jointPos.resize(endeffector_number_of_dofs[index]);
+    jointVel.resize(endeffector_number_of_dofs[index]);
+    iDynTree::toEigen(jointPos) = q.segment(endeffector_dof_offset[index], endeffector_number_of_dofs[index]);
+    iDynTree::toEigen(jointVel) = qd.segment(endeffector_dof_offset[index], endeffector_number_of_dofs[index]);
 
-//     ik_models[req.endeffector].setRobotState(robotstate.world_H_base, jointPos, robotstate.baseVel,
-//                                              jointVel, robotstate.gravity);
-//     ik[req.endeffector].clearProblem();
-// //    ik[req.endeffector].setMaxCPUTime(60);
-//     ik[req.endeffector].setCostTolerance(0.001);
-//     // we constrain the base link to stay where it is
-//     ik[req.endeffector].addTarget(ik_base_link[req.endeffector], ik_models[req.endeffector].model().getFrameTransform(
-//             ik_models[req.endeffector].getFrameIndex(ik_base_link[req.endeffector])),1,1);
+    ik_models[req->endeffector].setRobotState(robotstate.world_H_base, jointPos, robotstate.baseVel,
+                                             jointVel, robotstate.gravity);
+    ik[req->endeffector].clearProblem();
+//    ik[req.endeffector].setMaxCPUTime(60);
+    ik[req->endeffector].setCostTolerance(0.001);
+    // we constrain the base link to stay where it is
+    ik[req->endeffector].addTarget(ik_base_link[req->endeffector], ik_models[req->endeffector].model().getFrameTransform(
+            ik_models[req->endeffector].getFrameIndex(ik_base_link[req->endeffector])),1,1);
 
-//     switch (req.type) {
-//         case 0: {
-//             break;
-//         }
-//         case 1: {
-//             for (int reqIterator = 0; reqIterator < req.poses.size(); reqIterator++) {
-//                 iDynTree::Position pos(req.poses[reqIterator].position.x, req.poses[reqIterator].position.y, req.poses[reqIterator].position.z);
-//                 ik[req.endeffector].addPositionTarget(req.target_frames[reqIterator], pos, req.weights[reqIterator]);
-//             }
-//             break;
-//         }
-//         case 2: {
-//             break;
-//         }
-//     }
+    switch (req->type) {
+        case 0: {
+            break;
+        }
+        case 1: {
+            for (int reqIterator = 0; reqIterator < req->poses.size(); reqIterator++) {
+                iDynTree::Position pos(req->poses[reqIterator].position.x, req->poses[reqIterator].position.y, req->poses[reqIterator].position.z);
+                ik[req->endeffector].addPositionTarget(req->target_frames[reqIterator], pos, req->weights[reqIterator]);
+            }
+            break;
+        }
+        case 2: {
+            break;
+        }
+    }
 
-//     if (ik[req.endeffector].solve()) {
-//         iDynTree::Transform base_solution;
-//         iDynTree::VectorDynSize q_star;
-//         ik[req.endeffector].getFullJointsSolution(base_solution, q_star);
-//         RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"),"ik solution:\n" << "base solution:" << base_solution.toString() << "\njoint solution: "
-//                                          << q_star.toString());
-//         for (int i = 0; i < q_star.size(); i++) {
-//             res.joint_names.push_back(ik[req.endeffector].reducedModel().getJointName(i));
-//             res.angles.push_back(q_star(i));
-//         }
-//         return true;
-//     } else {
-//         switch (req.type) {
-//             case 0:
-//                 break;
-//             case 1:
-//                 RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"unable to solve position ik");
-//                 break;
+    if (ik[req->endeffector].solve()) {
+        iDynTree::Transform base_solution;
+        iDynTree::VectorDynSize q_star;
+        ik[req->endeffector].getFullJointsSolution(base_solution, q_star);
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"),"ik solution:\n" << "base solution:" << base_solution.toString() << "\njoint solution: "
+                                         << q_star.toString());
+        for (int i = 0; i < q_star.size(); i++) {
+            res->joint_names.push_back(ik[req->endeffector].reducedModel().getJointName(i));
+            res->angles.push_back(q_star(i));
+        }
+        return true;
+    } else {
+        switch (req->type) {
+            case 0:
+                break;
+            case 1:
+                RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"unable to solve position ik");
+                break;
 
-//             case 2:
-//                 break;
-//         }
+            case 2:
+                break;
+        }
 
-//         return false;
-//     }
-// }
+        return false;
+    }
+}
 
 
 //??? visualization_msgs
@@ -1029,8 +1031,8 @@ void Robot::FloatingBase(const geometry_msgs::msg::Pose::SharedPtr msg) {
 }
 
 
-//??? action
-// void Robot::MoveEndEffector(const roboy_control_msgs::MoveEndEffectorGoalConstPtr &goal){
+// // ??? action
+// // void Robot::MoveEndEffector(const roboy_control_msgs::MoveEndEffectorGoalConstPtr &goal){
 // void Robot::MoveEndEffector(const roboy_control_msgs::action::MoveEndEffectorGoal::SharedPtr goal){
 //     // roboy_control_msgs::MoveEndEffectorFeedback feedback;
 //     // roboy_control_msgs::MoveEndEffectorResult result;
@@ -1048,92 +1050,94 @@ void Robot::FloatingBase(const geometry_msgs::msg::Pose::SharedPtr msg) {
 // //        moveEndEffector_as[goal->endeffector]->setAborted(result, "endeffector " + goal->endeffector + " does not exist");
 //         return;
 //     }
-
+//                     //??? waht is casp
 //    moveEndEffector_as[casp]->acceptNewGoal();
-    // ???  srv
-    // roboy_middleware_msgs::InverseKinematics srv;
-    // srv.request.type = goal->ik_type;
-    // srv.request.target_frame = goal->target_frame;
-    // srv.request.endeffector = goal->endeffector;
+//     // ???  srv
+//     roboy_middleware_msgs::srv::InverseKinematics::Request req2;
+//     roboy_middleware_msgs::srv::InverseKinematics::Response res2;
+    
+//     req2.type = goal->ik_type;
+//     req2.target_frame = goal->target_frame;
+//     req2.endeffector = goal->endeffector;
 
-    // switch (goal->type) {
-    //     case 0: {
-    //         srv.request.pose = goal->pose;
-    //         break;
-    //     }
-    //     case 1: {
-    //         geometry_msgs::msg::Pose p;
-    //         getTransform("world",goal->target_frame,p);
-    //         Quaterniond q0(p.orientation.w,p.orientation.x,p.orientation.y,p.orientation.z);
-    //         Quaterniond q1(goal->pose.orientation.w,goal->pose.orientation.x,goal->pose.orientation.y,goal->pose.orientation.z);
-    //         Quaterniond q2 = q0*q1;
-    //         p.orientation.w = q.w();
-    //         p.orientation.x = q.x();
-    //         p.orientation.y = q.y();
-    //         p.orientation.z = q.z();
-    //         srv.request.pose = p;
-    //         break;
-    //     }
-    //     default:
-    //         success = false;
-    // }
+//     switch (goal->type) {
+//         case 0: {
+//             req2.pose = goal->pose;
+//             break;
+//         }
+//         case 1: {
+//             geometry_msgs::msg::Pose p;
+//             getTransform("world",goal->target_frame,p);
+//             Quaterniond q0(p.orientation.w,p.orientation.x,p.orientation.y,p.orientation.z);
+//             Quaterniond q1(goal->pose.orientation.w,goal->pose.orientation.x,goal->pose.orientation.y,goal->pose.orientation.z);
+//             Quaterniond q2 = q0*q1;
+//             p.orientation.w = q.w();
+//             p.orientation.x = q.x();
+//             p.orientation.y = q.y();
+//             p.orientation.z = q.z();
+//             req2.pose = p;
+//             break;
+//         }
+//         default:
+//             success = false;
+//     }
 
-    // publishCube(srv.request.pose, "world", "ik_target", 696969, COLOR(0, 1, 0, 1), 0.05, goal->timeout);
-    // int offset = endeffector_dof_offset[endeffector_index[goal->endeffector]];
-    // while (error > goal->tolerance && success && !timeout) {
-    //     if (moveEndEffector_as[goal->endeffector]->isPreemptRequested() || !rclcpp::ok()) {
-    //         RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"move endeffector: Preempted");
-    //         // set the action state to preempted
-    //         moveEndEffector_as[goal->endeffector]->setPreempted();
-    //         timeout = true;
-    //     }
+//     publishCube(srv.request.pose, "world", "ik_target", 696969, COLOR(0, 1, 0, 1), 0.05, goal->timeout);
+//     int offset = endeffector_dof_offset[endeffector_index[goal->endeffector]];
+//     while (error > goal->tolerance && success && !timeout) {
+//         if (moveEndEffector_as[goal->endeffector]->isPreemptRequested() || !rclcpp::ok()) {
+//             RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"move endeffector: Preempted");
+//             // set the action state to preempted
+//             moveEndEffector_as[goal->endeffector]->setPreempted();
+//             timeout = true;
+//         }
 
-    //     if (!ik_solution_available && (goal->type == 0 || goal->type == 1)) {
-    //         if (InverseKinematicsService(srv.request, srv.response)) {
-    //             ik_solution_available = true;
-    //             int j =0;
-    //             std_msgs::msg::Float32 msg;
-    //             for (int i = offset; i < offset+endeffector_number_of_dofs[endeffector_index[goal->endeffector]]; i++) {
-    //                 msg.data = srv.response.angles[j];
-    //                 joint_command_pub[i].publish(msg);
-    //                 j++;
-    //             }
-    //         } else {
-    //             ik_solution_available = false;
-    //         }
-    //     }
-    //     error = 0;
-    //     for (int i = offset; i < offset+endeffector_number_of_dofs[endeffector_index[goal->endeffector]]; i++) {
-    //         if(controller_type[i]!=CARDSflow::ControllerType::cable_length_controller)
-    //             continue;
-    //         error += pow(q_target[i]-q[i],2.0);
-    //     }
-    //     error = sqrt(error);
-    //     if(error < goal->tolerance ) {
-    //         success = true;
-    //         break;
-    //     }
+//         if (!ik_solution_available && (goal->type == 0 || goal->type == 1)) {
+//             if (InverseKinematicsService(srv.request, srv.response)) {
+//                 ik_solution_available = true;
+//                 int j =0;
+//                 std_msgs::msg::Float32 msg;
+//                 for (int i = offset; i < offset+endeffector_number_of_dofs[endeffector_index[goal->endeffector]]; i++) {
+//                     msg.data = srv.response.angles[j];
+//                     joint_command_pub[i].publish(msg);
+//                     j++;
+//                 }
+//             } else {
+//                 ik_solution_available = false;
+//             }
+//         }
+//         error = 0;
+//         for (int i = offset; i < offset+endeffector_number_of_dofs[endeffector_index[goal->endeffector]]; i++) {
+//             if(controller_type[i]!=CARDSflow::ControllerType::cable_length_controller)
+//                 continue;
+//             error += pow(q_target[i]-q[i],2.0);
+//         }
+//         error = sqrt(error);
+//         if(error < goal->tolerance ) {
+//             success = true;
+//             break;
+//         }
 
-    //     if ((rclcpp::Clock().now() - last_feedback_time).seconds() > 1) {
-    //         last_feedback_time = rclcpp::Clock().now();
-    //         // publish the feedback
-    //         feedback.error = error;
-    //         moveEndEffector_as[goal->endeffector]->publishFeedback(feedback);
-    //     }
-    //     if ((rclcpp::Clock().now() - start_time).seconds() > goal->timeout) {
-    //          RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"move endeffector timeout %d", goal->timeout);
-    //         success = false;
-    //     }
-    // }
-    // // publish the feedback
-    // moveEndEffector_as[goal->endeffector]->publishFeedback(feedback);
-    // if (error < goal->tolerance && success && !timeout) {
-    //     RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"MoveEndEffector: Succeeded");
-    //     moveEndEffector_as[goal->endeffector]->setSucceeded(result, "done");
-    // } else {
-    //     RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"MoveEndEffector: FAILED");   
-    //     moveEndEffector_as[goal->endeffector]->setAborted(result, "failed");
-    // }
+//         if ((rclcpp::Clock().now() - last_feedback_time).seconds() > 1) {
+//             last_feedback_time = rclcpp::Clock().now();
+//             // publish the feedback
+//             feedback.error = error;
+//             moveEndEffector_as[goal->endeffector]->publishFeedback(feedback);
+//         }
+//         if ((rclcpp::Clock().now() - start_time).seconds() > goal->timeout) {
+//              RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"move endeffector timeout %d", goal->timeout);
+//             success = false;
+//         }
+//     }
+//     // publish the feedback
+//     moveEndEffector_as[goal->endeffector]->publishFeedback(feedback);
+//     if (error < goal->tolerance && success && !timeout) {
+//         RCLCPP_INFO(rclcpp::get_logger("rclcpp"),"MoveEndEffector: Succeeded");
+//         moveEndEffector_as[goal->endeffector]->setSucceeded(result, "done");
+//     } else {
+//         RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),"MoveEndEffector: FAILED");   
+//         moveEndEffector_as[goal->endeffector]->setAborted(result, "failed");
+//     }
 // }
 
 bool Robot::parseViapoints(const string &viapoints_file_path, vector<Cable> &cables) {

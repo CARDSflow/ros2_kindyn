@@ -31,18 +31,14 @@
 //#include <controller_interface/controller.h>
 #include "controller_interface/controller_interface.hpp"
 
-
 //#include <hardware_interface/joint_command_interface.h>  find functions
 //??? no joint_command_interface in hardware_interface package of ROS2
 #include <hardware_interface/loaned_command_interface.hpp>
-
 #include <pluginlib/class_list_macros.hpp>
 
-// #include "kindyn/robot.hpp"
-
+#include "kindyn/robot.hpp"
 #include "kindyn/controller/cardsflow_state_interface.hpp"
 #include "kindyn/controller/cardsflow_command_interface.hpp"
-
 // #include <roboy_simulation_msgs/ControllerType.h>
 #include "roboy_simulation_msgs/msg/controller_type.hpp"
 #include <math.h>
@@ -50,7 +46,6 @@
 #include <std_msgs/msg/float32.hpp>
 //#include <roboy_control_msgs/SetControllerParameters.h>
 #include "roboy_control_msgs/srv/set_controller_parameters.hpp"
-
 
 # define M_2PI 2*M_PI
 
@@ -63,13 +58,13 @@ double wrap_pos_neg_pi(double angle)
     return fmod(angle + M_PI, M_2PI) - M_PI;
 }
 // class CableLengthController : public controller_interface::Controller<hardware_interface::CardsflowCommandInterface>
-//?? not sure if CableLengthController should inheri from rclcpp::Node
-class CableLengthController : public controller_interface::ControllerInterface , rclcpp::Node{
+// It's unusual for it to inherit directly from rclcpp::Node. Instead, they receive a node instance from the controller manager.
+class CableLengthController : public controller_interface::ControllerInterface{
 public:
     /**
      * Constructor
      */
-    CableLengthController() :Node("CableLengthController"){};
+    CableLengthController(){};
 
     /**
      * Initializes the controller. Will be call by controller_manager when loading this controller
@@ -79,50 +74,51 @@ public:
      */
 
 
+    // Override the command_interface_configuration method
+    controller_interface::InterfaceConfiguration command_interface_configuration() const override
+    {
+        return controller_interface::InterfaceConfiguration{
+            controller_interface::interface_configuration_type::NONE, {}};
+    }
+    // Override the state_interface_configuration method
+    controller_interface::InterfaceConfiguration state_interface_configuration() const override
+    {
+        return controller_interface::InterfaceConfiguration{
+            controller_interface::interface_configuration_type::NONE, {}};
+    }
+
+
     //CommandInterface
     // bool init(hardware_interface::CardsflowCommandInterface *hw, rclcpp::Node::SharedPtr node) {
-    bool init(hardware_interface::CardsflowCommandInterface *hw, rclcpp::Node::SharedPtr node) {
-        node_ = node;
+    controller_interface::return_type  init(const std::string &controller_name, rclcpp::NodeOptions &node_options)override  {
+        node_ = rclcpp::Node::make_shared(controller_name, node_options);
         // get joint name from the parameter server
         if (!node_->get_parameter("joint", joint_name)) {
             //ROS_ERROR   
             RCLCPP_ERROR(node_->get_logger(), "No joint given (namespace: %s)", std::string(node_->get_namespace()));
-            return false;
+            return controller_interface::return_type::ERROR;
         }
-
         //not needed 
         // In ROS2, spinners are replaced by executors
+        // controller class no longer needs to manage the spinner
         // Executors should be created outside of the class and spin should be called in a separate thread if needed
-
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
-
         controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
-        
-        // controller_state = [this]() {
-        //     return node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
-        // }();
-
         rclcpp::Rate r(10);
-
 
         while(controller_state->get_subscription_count()==0) // we wait until the controller state is available
             r.sleep();
 
-
         // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
         // joint = hw->getHandle(joint_name); // throws on failure
-        // joint = hw->claim_command_interface(joint_name);
 
-        joint_index = joint.getJointIndex();
-        last_update = node_->now();
-
-        
-        return true;
+        // joint = hw->getHandle(joint_name);
+        // joint_index = joint.getJointIndex();
+        // last_update = node_->now();
+    
+        return controller_interface::return_type::OK;
     }
-
-
-
 
 
     /**
@@ -146,6 +142,30 @@ public:
         last_update = time;
     }
 
+
+    // we don't have rclcpp::Duration &period as parameters in update()
+    // when calling update in ros1, two parameters like time and period will be passed
+    controller_interface::return_type update() override{
+    // void update(const rclcpp::Time &time, const rclcpp::Duration &period) {
+        rclcpp::Time time;
+        time = rclcpp::Clock().now();  
+
+        double q = joint.getPosition();
+        double q_target = joint.getJointPositionCommand();
+        MatrixXd L = joint.getL();
+        VectorXd Kp = *joint.Kp_;
+        VectorXd Kd = *joint.Kd_;
+
+        double p_error = wrap_pos_neg_pi(q - q_target);
+        // we use the joint_index column of the L matrix to calculate the result for this joint only
+        //?? period
+        //VectorXd ld = L.col(joint_index) * (Kd[joint_index] * (p_error - p_error_last)/period.seconds() + Kp[joint_index] * p_error);
+        //joint.setMotorCommand(ld);
+        p_error_last = p_error;
+        last_update = time;
+    }
+
+
     /**
      * Called by controller manager when the controller is about to be started
      * @param time current time
@@ -166,13 +186,12 @@ public:
     }
 
 
-
     /**
      * Joint position command callback for this joint
      * @param msg joint position target in radians
      */
-    void JointPositionCommand(const std_msgs::msg::Float32 &msg){
-        joint.setJointPositionCommand(msg.data);
+    void JointPositionCommand(const std_msgs::msg::Float32::SharedPtr msg){
+        joint.setJointPositionCommand(msg->data);
     }
 
 
@@ -191,6 +210,7 @@ private:
     //boost::shared_ptr<ros::AsyncSpinner> spinner; /// ROS async spinner
 
     hardware_interface::CardsflowHandle joint; /// cardsflow joint handle for access to joint/cable model state
+    //hardware_interface::LoanedCommandInterface joint;
     
     // ros::Subscriber joint_command; /// joint command subscriber
     //                     type of template parameters not sure, here is consistent with JointPositionCommand
@@ -203,3 +223,8 @@ private:
 
 
 // PLUGINLIB_EXPORT_CLASS(CableLengthController, controller_interface::ControllerBase);
+// RCLCPP_COMPONENTS_REGISTER_CLASS(CableLengthController, controller_interface::ControllerInterface);
+
+// // Register the controller in the controller_interface namespace
+// #include "pluginlib/class_list_macros.hpp"
+// PLUGINLIB_EXPORT_CLASS(example_controller::ExampleController, controller_interface::ControllerInterface)

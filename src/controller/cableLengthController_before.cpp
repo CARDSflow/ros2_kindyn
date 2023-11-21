@@ -26,40 +26,46 @@
     description: A Cable length controller for joint position targets using PD control
 */
 
+
 #include <type_traits>
-// #include <controller_interface/controller.h>
+//#include <controller_interface/controller.h>
 #include "controller_interface/controller_interface.hpp"
 
-// #include <hardware_interface/joint_command_interface.h>
+//#include <hardware_interface/joint_command_interface.h>  find functions
 //??? no joint_command_interface in hardware_interface package of ROS2
 #include <hardware_interface/loaned_command_interface.hpp>
-
 #include <pluginlib/class_list_macros.hpp>
 
-// #include "kindyn/robot.hpp"
+#include "kindyn/robot.hpp"
 
 #include "kindyn/controller/cardsflow_state_interface.hpp"
 #include "kindyn/controller/cardsflow_command_interface.hpp"
-
 // #include <roboy_simulation_msgs/ControllerType.h>
 #include "roboy_simulation_msgs/msg/controller_type.hpp"
-// #include <std_msgs/Float32.h>
+#include <math.h>
+#include <cmath>
 #include <std_msgs/msg/float32.hpp>
-// #include <roboy_control_msgs/SetControllerParameters.h>
+//#include <roboy_control_msgs/SetControllerParameters.h>
 #include "roboy_control_msgs/srv/set_controller_parameters.hpp"
 
+# define M_2PI 2*M_PI
 
 using namespace std;
+using namespace hardware_interface;
 
-// class CableLengthVelocityController : public controller_interface::Controller<hardware_interface::CardsflowCommandInterface> {
-//?? not sure if CableLengthVelocityController should inheri from rclcpp::Node
 
-class CableLengthVelocityController : public controller_interface::ControllerInterface {
+double wrap_pos_neg_pi(double angle)
+{
+    return fmod(angle + M_PI, M_2PI) - M_PI;
+}
+// class CableLengthController : public controller_interface::Controller<hardware_interface::CardsflowCommandInterface>
+// It's unusual for it to inherit directly from rclcpp::Node. Instead, they receive a node instance from the controller manager.
+class CableLengthController : public controller_interface::ControllerInterface{
 public:
     /**
      * Constructor
      */
-    CableLengthVelocityController(){};
+    CableLengthController(){};
 
     /**
      * Initializes the controller. Will be call by controller_manager when loading this controller
@@ -67,6 +73,10 @@ public:
      * @param node the node
      * @return success
      */
+
+
+    //CommandInterface
+    // bool init(hardware_interface::CardsflowCommandInterface *hw, rclcpp::Node::SharedPtr node) {
     bool init(hardware_interface::CardsflowCommandInterface *hw, rclcpp::Node::SharedPtr node) {
         node_ = node;
         // get joint name from the parameter server
@@ -78,6 +88,7 @@ public:
 
         //not needed 
         // In ROS2, spinners are replaced by executors
+        // controller class no longer needs to manage the spinner
         // Executors should be created outside of the class and spin should be called in a separate thread if needed
         // spinner.reset(new ros::AsyncSpinner(0));
         // spinner->start();
@@ -85,28 +96,22 @@ public:
         controller_state = node_->create_publisher<roboy_simulation_msgs::msg::ControllerType>("/controller_type", 1);
         rclcpp::Rate r(10);
 
+
         while(controller_state->get_subscription_count()==0) // we wait until the controller state is available
             r.sleep();
 
-        // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
-        joint = hw->getHandle(joint_name); // throws on failure
 
+        // ??? no getHandle function found in hardware_interface::CardsflowCommandInterface
+        // joint = hw->getHandle(joint_name); // throws on failure
+
+        joint = hw->getHandle(joint_name);
         joint_index = joint.getJointIndex();
         last_update = node_->now();
-        
-        // joint_command = nh.subscribe((joint_name+"/target").c_str(),1,&CableLengthVelocityController::JointVelocityCommand, this);
-        joint_command = node_->create_subscription<std_msgs::msg::Float32>
-        (std::string(joint_name+"/target"), 1, 
-        std::bind(&CableLengthVelocityController::JointVelocityCommand, this, std::placeholders::_1));
 
-        // controller_parameter_srv = nh.advertiseService((joint_name+"/params").c_str(),& CableLengthVelocityController::setControllerParameters, this);
-        controller_parameter_srv = node_->create_service<roboy_control_msgs::srv::SetControllerParameters>
-        (joint_name + "/params", 
-        std::bind(&CableLengthVelocityController::setControllerParameters,
-         this, std::placeholders::_1, std::placeholders::_2));  
         
         return true;
     }
+
 
     /**
      * Called regularily by controller manager. The length change of the cables wrt to a PD controller on the joint target
@@ -115,13 +120,15 @@ public:
      * @param period period since last control
      */
     void update(const rclcpp::Time &time, const rclcpp::Duration &period) {
-        double qd = joint.getVelocity();
-        double qd_target = joint.getJointVelocityCommand();
+        double q = joint.getPosition();
+        double q_target = joint.getJointPositionCommand();
         MatrixXd L = joint.getL();
-        double p_error = qd - qd_target;
+        VectorXd Kp = *joint.Kp_;
+        VectorXd Kd = *joint.Kd_;
+
+        double p_error = wrap_pos_neg_pi(q - q_target);
         // we use the joint_index column of the L matrix to calculate the result for this joint only
-        VectorXd ld = L.col(joint_index) * (Kd * (p_error - p_error_last)/period.seconds() + Kp * p_error);
-//        ROS_INFO_STREAM_THROTTLE(1, ld.transpose());
+        VectorXd ld = L.col(joint_index) * (Kd[joint_index] * (p_error - p_error_last)/period.seconds() + Kp[joint_index] * p_error);
         joint.setMotorCommand(ld);
         p_error_last = p_error;
         last_update = time;
@@ -132,7 +139,7 @@ public:
      * @param time current time
      */
     void starting(const rclcpp::Time& time) {
-        RCLCPP_WARN(node_->get_logger(), "cable velocity controller started for %s with index %d", joint_name.c_str(), joint_index);
+        RCLCPP_WARN(node_->get_logger(), "cable length controller started for %s with index %d", joint_name.c_str(), joint_index);
         roboy_simulation_msgs::msg::ControllerType msg;
         msg.joint_name = joint_name;
         msg.type = CARDSflow::ControllerType::cable_length_controller;
@@ -142,46 +149,39 @@ public:
      * Called by controller manager when the controller is about to be stopped
      * @param time current time
      */
-    void stopping(const rclcpp::Time& time) { 
-        RCLCPP_WARN(node_->get_logger(),"cable velocity controller stopped for %s", joint_name.c_str());}
+    void stopping(const rclcpp::Time& time) {
+        RCLCPP_WARN(node_->get_logger(), "cable length controller stopped for %s", joint_name.c_str());
+    }
+
 
     /**
      * Joint position command callback for this joint
      * @param msg joint position target in radians
      */
-    // void JointVelocityCommand(const std_msgs::msg::Float32 &msg){
-    //     joint.setJointVelocityCommand(msg.data);
-    // }
-    void JointVelocityCommand(const std_msgs::msg::Float32::SharedPtr msg) {
-        joint.setJointVelocityCommand(msg->data);
+    void JointPositionCommand(const std_msgs::msg::Float32::SharedPtr msg){
+        joint.setJointPositionCommand(msg->data);
     }
 
 
-    /**
-     * Controller Parameters service
-     * @param req requested gains
-     * @param res success
-     * @return success
-     */
-    bool setControllerParameters( roboy_control_msgs::srv::SetControllerParameters::Request ::SharedPtr req,
-                                  roboy_control_msgs::srv::SetControllerParameters::Response ::SharedPtr res){
-        Kp = req->kp;
-        Kd = req->kd;
-        res->success = true;
-        return true;
-    }
 private:
-
-     rclcpp::Publisher<roboy_simulation_msgs::msg::ControllerType>::SharedPtr controller_statee;
-
-
-    double Kp = 0.1, Kd = 0; /// PD gains
     double p_error_last = 0; /// last error
+
     rclcpp::Node::SharedPtr node_; /// ROS2 node
+
+    //ros::Publisher controller_state; /// publisher for controller state
     rclcpp::Publisher<roboy_simulation_msgs::msg::ControllerType>::SharedPtr controller_state;/// publisher for controller state
-    rclcpp::Service<roboy_control_msgs::srv::SetControllerParameters>::SharedPtr controller_parameter_srv; /// service for controller parameters
+   
+    // ros::ServiceServer controller_parameter_srv; /// service for controller parameters
+    rclcpp::Service<roboy_control_msgs::srv::SetControllerParameters>::SharedPtr controller_parameter_srv;
+
+    // spinner is intergrated into ROS2 Node
     //boost::shared_ptr<ros::AsyncSpinner> spinner; /// ROS async spinner
+
     hardware_interface::CardsflowHandle joint; /// cardsflow joint handle for access to joint/cable model state
+    //hardware_interface::LoanedCommandInterface joint;
+    
+    // ros::Subscriber joint_command; /// joint command subscriber
+    //                     type of template parameters not sure, here is consistent with JointPositionCommand
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr joint_command; /// joint command subscriber
     
     string joint_name; /// name of the controlled joint
@@ -189,4 +189,6 @@ private:
     rclcpp::Time last_update; /// time of last update
 };
 
-//PLUGINLIB_EXPORT_CLASS(CableLengthVelocityController, controller_interface::ControllerBase);
+
+// PLUGINLIB_EXPORT_CLASS(CableLengthController, controller_interface::ControllerBase);
+// PLUGINLIB_EXPORT_CLASS(CableLengthController, controller_interface::ControllerInterface);
