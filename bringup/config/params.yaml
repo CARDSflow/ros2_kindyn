@@ -1,0 +1,38 @@
+/**:
+    ros__parameters:
+        robot_name: "msj_platform"
+        robot_model: "pinky"
+        model_name: "$(arg robot_name)"
+        urdf_file_name: "model.urdf"
+        # cardsflow_file_name: "cardsflow.xml"
+        # start_controllers: "head_axis0 head_axis1 head_axis2"
+        # start_controllers: "$(arg robot_model)_head_axis0 $(arg robot_model)_head_axis1 $(arg robot_model)_head_axis2 $(arg robot_model)_shoulder_left_axis0 $(arg robot_model)_shoulder_left_axis1 $(arg robot_model)_shoulder_left_axis2 $(arg robot_model)_elbow_left_axis0 $(arg robot_model)_elbow_left_axis1"
+        # start_controllers: "$(arg robot_model)_shoulder_left_axis0 $(arg robot_model)_shoulder_left_axis1 $(arg robot_model)_shoulder_left_axis2 $(arg robot_model)_elbow_left_axis0 $(arg robot_model)_elbow_left_axis1 $(arg robot_model)_head_axis0 $(arg robot_model)_head_axis1 $(arg robot_model)_head_axis2 $(arg robot_model)_shoulder_right_axis0 $(arg robot_model)_shoulder_right_axis1 $(arg robot_model)_shoulder_right_axis2 $(arg robot_model)_elbow_right_axis0 $(arg robot_model)_elbow_right_axis1"
+        simulated: false
+        gazebo: false
+        paused: false
+        use_sim_time: false
+        gui: true
+        headless: false
+        debug: false
+        external_robot_state: false
+        external_robot_target: false
+        x: 0
+        y: 0
+        z: 0
+        physics: "ode"
+
+        # robot_description: "$(find robots)/$(arg model_name)/model.urdf"
+        # TODO
+        urdf_file_path:      "/home/benno/code/ros2_ws/src/ros2_control_upper_body/urdf/robody.urdf"   # ROS1 container: /roboy3/src/robots/upper_body/model.urdf
+        viapoints_file_path: "/home/benno/code/ros2_ws/src/ros2_control_upper_body/urdf/cardsflow.xml" # ROS1 container: /roboy3/src/robots/upper_body/cardsflow.xml
+
+        cardsflow_xml: "$(find robots)/$(arg model_name)/cardsflow.xml"
+        # cardsflow_xml: "$(find robots)/$(arg model_name)/$(arg cardsflow_file_name)"
+        q_target: [0.0, 0.0, 0.0]
+        pwm: 5.0
+        m3_pwm: 5.0
+        min_force: 0.0
+        max_force: 100000.0
+        controller: 2
+        initialized: [true, true]
