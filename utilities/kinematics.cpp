@@ -23,13 +23,14 @@ void Kinematics::init(string urdf_file_path, string viapoints_file_path, vector 
     // Helper class to load the model from an external format
     iDynTree::ModelLoader mdlLoader;
     bool ok ;
+    RCLCPP_INFO_STREAM(rclcpp::get_logger("Kinematics"), "joint_names_ordered.size(): " << joint_names_ordered.size());
     if(joint_names_ordered.empty())
         ok = mdlLoader.loadModelFromFile(urdf_file_path);
     else
         ok = mdlLoader.loadReducedModelFromFile(urdf_file_path, joint_names_ordered);
 
     if (!ok) {
-        RCLCPP_FATAL_STREAM(rclcpp::get_logger("rclcpp"), "KinDynComputationsWithEigen: impossible to load model from " << urdf_file_path);
+        RCLCPP_FATAL_STREAM(rclcpp::get_logger("Kinematics"), "KinDynComputationsWithEigen: impossible to load model from " << urdf_file_path);
         return;
     }
 
@@ -37,14 +38,14 @@ void Kinematics::init(string urdf_file_path, string viapoints_file_path, vector 
     ok = kinDynComp.loadRobotModel(mdlLoader.model());
 
     if (!ok) {
-        RCLCPP_FATAL_STREAM(rclcpp::get_logger("rclcpp"), 
+        RCLCPP_FATAL_STREAM(rclcpp::get_logger("Kinematics"), 
                 "KinDynComputationsWithEigen: impossible to load the following model in a KinDynComputations class:"
                         << std::endl
                         << mdlLoader.model().toString());
         return;
     }
 
-    RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"),kinDynComp.getDescriptionOfDegreesOfFreedom());
+    RCLCPP_INFO_STREAM(rclcpp::get_logger("Kinematics"),kinDynComp.getDescriptionOfDegreesOfFreedom());
 
     kinDynCompTarget.loadRobotModel(mdlLoader.model());
 
@@ -61,13 +62,13 @@ void Kinematics::init(string urdf_file_path, string viapoints_file_path, vector 
      */
 
     if (!parseViapoints(viapoints_file_path, cables)) {
-        RCLCPP_FATAL_STREAM(rclcpp::get_logger("rclcpp"),"something went wrong parsing the viapoints");
+        RCLCPP_FATAL_STREAM(rclcpp::get_logger("Kinematics"),"something went wrong parsing the viapoints");
         return;
     }
 
     number_of_cables = cables.size();
 
-    RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"),
+    RCLCPP_INFO_STREAM(rclcpp::get_logger("Kinematics"),
             "robot:\ndofs: " << number_of_dofs << "\njoints: " << number_of_joints << "\nlinks: " << number_of_links
                              << "\nnumber_of_cables: " << number_of_cables);
 
@@ -76,17 +77,23 @@ void Kinematics::init(string urdf_file_path, string viapoints_file_path, vector 
     for (long unsigned int link = 0; link < number_of_links; link++) {
         string link_name = model.getLinkName(link);
         link_names.push_back(link_name);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"),link_name);
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("Kinematics"),link_name);
         link_index[link_name] = link;
     }
     for (long unsigned int joint = 0; joint < number_of_dofs; joint++) {
-        iDynTree::Vector6 s = model.getJoint(joint)->getMotionSubspaceVector(0, model.getJoint(
-                joint)->getSecondAttachedLink(), model.getJoint(joint)->getFirstAttachedLink()).asVector();
+        // getMotionSubspaceVector(int dof_i, const LinkIndex child, const LinkIndex parent = LINK_INVALID_INDEX)
+        // Get the motion subspace vector corresponding to the i-th dof of the joint
+        // https://robotology.github.io/idyntree/classiDynTree_1_1PrismaticJoint.html
+        iDynTree::Vector6 s = model.getJoint(joint)->getMotionSubspaceVector(
+            0,
+            model.getJoint(joint)->getSecondAttachedLink(),
+            model.getJoint(joint)->getFirstAttachedLink()
+        ).asVector();
         string joint_name = model.getJointName(joint);
         joint_names.push_back(joint_name);
         VectorXd axis = iDynTree::toEigen(s);
         joint_axis.push_back(axis);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"),joint_name << " " << axis.transpose().format(fmt));
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("Kinematics"), joint_name << " " << axis.transpose().format(fmt));
         joint_index[joint_name] = joint;
     }
 
@@ -136,6 +143,8 @@ void Kinematics::init(string urdf_file_path, string viapoints_file_path, vector 
         joint_state[joint][1] = 0;
         q_min[joint] = model.getJoint(joint)->getMinPosLimit(0);
         q_max[joint] = model.getJoint(joint)->getMaxPosLimit(0);
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("Kinematics"),
+            "q_min[" << joint << "]: " << q_min[joint] << "  q_max[" << joint << "]: " << q_max[joint]);
     }
 
     /**
@@ -325,8 +334,9 @@ vector<VectorXd> Kinematics::oneStepForward(VectorXd& q_in, VectorXd& qd_in, vec
         joint_state[i][1] = qd_in[i];
     }
 
+    // Ld.size()=3, Ld[0].size()=38, Ld[1].size()=38, Ld[2].size()=38 for UpperBody
     for(long unsigned int i = 0; i<endeffectors.size();i++) {
-        int dof_offset = endeffector_dof_offset[i];
+        int dof_offset = endeffector_dof_offset[i]; // endeffector_dof_offset = {0,8,11} for UpperBody
         MatrixXd L_endeffector = L.block(0,dof_offset,number_of_cables,endeffector_number_of_dofs[i]);
 //        L_endeffector = L_endeffector + 1e-2 * MatrixXd::Identity(L_endeffector.rows(), L_endeffector.cols());
         MatrixXd L_endeffector_inv = EigenExtension::Pinv(L_endeffector);

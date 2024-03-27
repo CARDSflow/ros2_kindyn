@@ -1,7 +1,3 @@
-//
-// Created by roboy on 30.02.24.
-//
-
 #ifndef ROS2_CONTROL_KINDYN__ROBOT_HPP_
 #define ROS2_CONTROL_KINDYN__ROBOT_HPP_
 
@@ -30,33 +26,23 @@
 #include "roboy_simulation_msgs/msg/joint_state.hpp"
 #include "roboy_middleware_msgs/srv/forward_kinematics.hpp"
 #include "roboy_middleware_msgs/srv/inverse_kinematics.hpp"
-// #include <roboy_middleware_msgs/srv/inverse_kinematics_multiple_frames.hpp>
 #include "roboy_middleware_msgs/msg/motor_command.hpp"
 #include "roboy_middleware_msgs/msg/motor_status.hpp"
-#include "roboy_control_msgs/msg/end_effector.hpp" // #include <roboy_control_msgs/MoveEndEffectorAction.h>
+#include "roboy_control_msgs/msg/end_effector.hpp" 
 #include "roboy_control_msgs/msg/strings.hpp"
 
-// #include <tf2/LinearMath/Quaternion.h> // #include <tf/tf.h>
-// tf2_ros and tf2_eigen nedded?
-// #include "tf2_ros/transform_broadcaster.hpp"
-// #include <tf2_ros/transform_listener.h>
-// #include <tf2_eigen/tf2_eigen.h>
-// #include <tf2_geometry_msgs/tf2_geometry_msgs.h> // #include <eigen_conversions/eigen_msg.h>
+#include "tf2/transform_datatypes.h"
+#include "tf2_ros/transform_broadcaster.h"
+#include "tf2_ros/transform_listener.h"
+#include <tf2/convert.h> 
 
-// #include <controller_manager/controller_manager.h>
-// #include <controller_manager_msgs/LoadController.h>
-// #include <hardware_interface/joint_state_interface.h>
-// #include <hardware_interface/joint_command_interface.h>
-// #include <hardware_interface/robot_hw.h>
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
-// #include "hardware_interface/types/hardware_interface_status_values.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 
-// #include <common_utilities/rviz_visualization.hpp> // still in ROS1
-// #include <visualization_msgs/InteractiveMarkerFeedback.h>
+// #include <common_utilities/rviz_visualization.hpp> // TODO include is not working
 
 #include <algorithm>
 #include <chrono>
@@ -88,16 +74,14 @@ namespace cardsflow {
       ~RobotHardware();
 
       /**
-        * is called once during ros2_control initialization if the Robot was specified in the URDF
-        * sets up the communication between the robot hardware and allocates memory dynamically
+        * Is called once during ros2_control initialization if the Robot was specified in the URDF.
+        * Sets up the communication between the robot hardware and allocates memory dynamically.
         * @param info structure with data from URDF.
         * \returns CallbackReturn::SUCCESS if required data are provided and can be parsed.
         * \returns CallbackReturn::ERROR if any error happens or data are missing.
         */
       CallbackReturn on_init(const hardware_interface::HardwareInfo & info) override;
 
-      // TODO
-      /// Exports all state interfaces for this hardware interface.
       /**
       * The state interfaces have to be created and transferred according
       * to the hardware info passed in for the configuration.
@@ -108,8 +92,6 @@ namespace cardsflow {
       */
       std::vector<hardware_interface::StateInterface> export_state_interfaces() override;
 
-      // TODO
-      /// Exports all command interfaces for this hardware interface.
       /**
       * The command interfaces have to be created and transferred according
       * to the hardware info passed in for the configuration.
@@ -141,9 +123,6 @@ namespace cardsflow {
       virtual hardware_interface::return_type write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
       {
         RCUTILS_LOG_WARN_THROTTLE(RCUTILS_STEADY_TIME, 1.0, "writing virtual, " "you probably forgot to implement your own write function?!");
-      //   // for (uint i = 0; i < hw_commands_dummy_.size(); i++) {
-      //   //   hw_states_dummy_[i] = hw_commands_dummy_[i];
-      //   // }
         return hardware_interface::return_type::OK;
       };
 
@@ -153,19 +132,34 @@ namespace cardsflow {
       void update();
 
 
-      // TODO: implement this function in side the cableLengthController when ROS2 Jazzy is released
-      // controller_interface::return_type RobotHardware::controller_update(const rclcpp::Time & time, const rclcpp::Duration & period)
-      void controller_update(hardware_interface::CardsflowHandle & joint, const rclcpp::Time & time, const rclcpp::Duration & period, size_t i);
-
+      /* TODO: This function is the old update function from the ROS1 cableLengthController.
+       * This should be moved back to the cableLengthController when ROS2 Jazzy is released because right now it is not possible to pass a class to the Humble controller.
+       * This function should calculate the new state inside the controller and not inside the hardware interface like it is implemented right now.
+       */
+      void controller_update(hardware_interface::CardsflowHandle & joint, const rclcpp::Time & time, const rclcpp::Duration & period);
    
       bool simulated = false;
 
     protected:
 
-      // TODO: Store the real command for the simulated robot, not just dummy values
-      std::vector<double> hw_states_dummy_;
-      std::vector<double> hw_commands_dummy_;
+      /*
+       * Stores the positions of all joints to update Rviz.
+       * This vector is passed to the controller.
+       */
+      std::vector<double> hw_states_fwd_pos_ctrl_;
+      /*
+       * This vector is passed to the controller but not really used.
+       */
+      std::vector<double> hw_commands_fwd_pos_ctrl_;
+      /*
+       * TODO: This vector should be passed to the CableLengthController but this is not yet possible.
+       * This vector stores the joint state of all joints.
+       */
       std::vector<hardware_interface::CardsflowStateHandle> hw_states_;
+      /*
+       * TODO: This vector should be passed to the CableLengthController but this is not yet possible.
+       * This vector stores the joint command of all joints.
+       */
       std::vector<hardware_interface::CardsflowHandle> hw_commands_;
 
       void updatePublishers();
@@ -177,6 +171,11 @@ namespace cardsflow {
         * @param msg message containing joint_name/angle information
         */
       void JointState(const sensor_msgs::msg::JointState::SharedPtr msg);
+
+      /**
+        * Callback for the targeted joint state of the robot. This can come from the controller or the programmer.
+        * @param msg message containing joint_name/angle information
+        */
       void JointTarget(const sensor_msgs::msg::JointState::SharedPtr msg);
 
       /**
@@ -200,28 +199,22 @@ namespace cardsflow {
       bool torque_position_controller_active = false;
       bool force_position_controller_active = false;
       bool cable_length_controller_active = false;
-      // hardware_interface::CardsflowStateInterface cardsflow_state_interface; /// cardsflow state interface
-      // hardware_interface::CardsflowCommandInterface cardsflow_command_interface; /// cardsflow command interface
       vector<int> controller_type; /// currently active controller type
 
-      // ros::Publisher robot_state_pub, tendon_state_pub, tendon_ext_state_pub, joint_state_pub, cardsflow_joint_states_pub; /// ROS robot pose and tendon publisher
-      rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr robot_state_pub;
-      rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_pub;
-      rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_ext_state_pub; 
-      rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_pub;
-      rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr cardsflow_joint_states_pub;
-      // ros::Publisher robot_state_target_pub, tendon_state_target_pub, joint_state_target_pub; /// target publisher
-      rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr robot_state_target_pub;
-      rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_target_pub;
-      rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_target_pub; 
-      // ros::Subscriber controller_type_sub, joint_state_sub, floating_base_sub, interactive_marker_sub, joint_target_sub, zero_joints_sub; /// ROS subscribers
-      rclcpp::Subscription<roboy_simulation_msgs::msg::ControllerType>::SharedPtr controller_type_sub;
-      rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub;
-      rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr floating_base_sub;
-      //TODO rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerFeedbackConstPtr>::SharedPtr interactive_marker_sub;
-      rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_target_sub;
-      rclcpp::Subscription<roboy_control_msgs::msg::Strings>::SharedPtr zero_joints_sub;
-      // ros::ServiceServer ik_srv, ik_two_frames_srv, fk_srv, freeze_srv;
+      rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr robot_state_pub; /// ROS robot pose and tendon publisher
+      rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_pub; /// ROS robot pose and tendon publisher
+      rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_ext_state_pub; /// ROS robot pose and tendon publisher
+      rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_pub; /// ROS robot pose and tendon publisher
+      rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr cardsflow_joint_states_pub; /// ROS robot pose and tendon publisher
+      rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr robot_state_target_pub; /// target publisher
+      rclcpp::Publisher<roboy_simulation_msgs::msg::Tendon>::SharedPtr tendon_state_target_pub; /// target publisher
+      rclcpp::Publisher<roboy_simulation_msgs::msg::JointState>::SharedPtr joint_state_target_pub; /// target publisher
+      rclcpp::Subscription<roboy_simulation_msgs::msg::ControllerType>::SharedPtr controller_type_sub; /// ROS subscribers
+      rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub; /// ROS subscribers
+      rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr floating_base_sub; /// ROS subscribers
+      //TODO rclcpp::Subscription<visualization_msgs::msg::InteractiveMarkerFeedbackConstPtr>::SharedPtr interactive_marker_sub; /// ROS subscribers
+      rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_target_sub; /// ROS subscribers
+      rclcpp::Subscription<roboy_control_msgs::msg::Strings>::SharedPtr zero_joints_sub; /// ROS subscribers
       rclcpp::Service<roboy_middleware_msgs::srv::InverseKinematics>::SharedPtr ik_srv;
       rclcpp::Service<roboy_middleware_msgs::srv::InverseKinematics>::SharedPtr ik_two_frames_srv;
       rclcpp::Service<roboy_middleware_msgs::srv::ForwardKinematics>::SharedPtr fk_srv;

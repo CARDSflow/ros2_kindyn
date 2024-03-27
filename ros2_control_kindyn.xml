@@ -1,12 +1,4 @@
 <library path="ros2_control_kindyn">
-  <!-- <class name="ros2_control_kindyn/RobotHardware"
-         type="cardsflow::kindyn::RobotHardware"
-         base_class_type="hardware_interface::SystemInterface">
-    <description>
-      Robot hardware plugin for Roboy.
-    </description>
-  </class> -->
-  <!-- It works with type "cardsflow::kindyn::RobotHardware" -->
   <class name="ros2_control_kindyn/UpperBody"
          type="UpperBody"
          base_class_type="hardware_interface::SystemInterface">

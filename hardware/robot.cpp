@@ -1,5 +1,5 @@
 //
-// Created by roboy on 30.02.24.
+// Created by roboy on 01.07.21. Updated 28.03.24
 //
 
 #include "ros2_control_kindyn/robot.hpp"
@@ -19,7 +19,6 @@ RobotHardware::RobotHardware() {
 
   spinner = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
   spinner->add_node(node_); // Add the node node_ to the executor
-  // spinner->start();
   executor_thread = std::thread([this]() { spinner->spin(); });
 }
 
@@ -32,14 +31,14 @@ RobotHardware::~RobotHardware() {
 
 void RobotHardware::updatePublishers() {
   RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"), "advertising " << topic_root+"/robot_state");
-  robot_state_pub            = node_->create_publisher<geometry_msgs::msg::PoseStamped>(topic_root + "control/robot_state", 1);
-  tendon_state_pub           = node_->create_publisher<roboy_simulation_msgs::msg::Tendon>(topic_root + "control/tendon_state", 1);
+  robot_state_pub            = node_->create_publisher<geometry_msgs::msg::PoseStamped>(topic_root + "control/robot_state", 1);               // usd in publishViz
+  tendon_state_pub           = node_->create_publisher<roboy_simulation_msgs::msg::Tendon>(topic_root + "control/tendon_state", 1);           // usd in publishViz
   tendon_ext_state_pub       = node_->create_publisher<roboy_simulation_msgs::msg::Tendon>(topic_root + "control/tendon_state_ext", 1);
-  joint_state_pub            = node_->create_publisher<roboy_simulation_msgs::msg::JointState>(topic_root + "control/rviz_joint_states", 1);
-  cardsflow_joint_states_pub = node_->create_publisher<sensor_msgs::msg::JointState>(topic_root + "control/cardsflow_joint_states", 1);
-  robot_state_target_pub     = node_->create_publisher<geometry_msgs::msg::PoseStamped>(topic_root + "control/robot_state_target", 1);
+  joint_state_pub            = node_->create_publisher<roboy_simulation_msgs::msg::JointState>(topic_root + "control/rviz_joint_states", 1);  // usd in publishViz
+  cardsflow_joint_states_pub = node_->create_publisher<sensor_msgs::msg::JointState>(topic_root + "control/cardsflow_joint_states", 1);       // usd in publishViz
+  robot_state_target_pub     = node_->create_publisher<geometry_msgs::msg::PoseStamped>(topic_root + "control/robot_state_target", 1);        // usd in publishViz
   tendon_state_target_pub    = node_->create_publisher<roboy_simulation_msgs::msg::Tendon>(topic_root + "control/tendon_state_target", 1);
-  joint_state_target_pub     = node_->create_publisher<roboy_simulation_msgs::msg::JointState>(topic_root + "control/joint_state_target", 1);
+  joint_state_target_pub     = node_->create_publisher<roboy_simulation_msgs::msg::JointState>(topic_root + "control/joint_state_target", 1); 
 }
 
 void RobotHardware::updateSubscribers() {
@@ -60,8 +59,8 @@ CallbackReturn RobotHardware::on_init(const hardware_interface::HardwareInfo & i
   {
     return CallbackReturn::ERROR;
   }
-  hw_states_dummy_.resize(info_.joints.size(), -0.5);  // dummy state   for the controller
-  hw_commands_dummy_.resize(info_.joints.size(), 6.2); // dummy command for the controller
+  hw_states_fwd_pos_ctrl_.resize(info_.joints.size(), 0.0);   // forward position states   for the "cableLengthControler"
+  hw_commands_fwd_pos_ctrl_.resize(info_.joints.size(), 0.0); // forward position commands for the "cableLengthControler"
   hw_states_.resize(info_.joints.size(), hardware_interface::CardsflowStateHandle());
   hw_commands_.resize(info_.joints.size(), hardware_interface::CardsflowHandle());
   p_error_last.resize(info_.joints.size(), 0.0);
@@ -72,41 +71,39 @@ CallbackReturn RobotHardware::on_init(const hardware_interface::HardwareInfo & i
   fmt = Eigen::IOFormat(4, 0, " ", ";\n", "", "", "[", "]");
   node_->declare_parameter("external_robot_target", false);
   node_->get_parameter("external_robot_target", external_robot_target);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "external_robot_target: %d", external_robot_target);
   node_->declare_parameter("external_robot_state", false);
   node_->get_parameter("external_robot_state", external_robot_state);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "external_robot_state: %d", external_robot_state);
 
   vector<string> link_relation_names_default{"default"};
   node_->declare_parameter("link_relation_names", link_relation_names_default);
   node_->get_parameter("link_relation_names", kinematics.link_relation_name);
   for (string lr:kinematics.link_relation_name) {
-    // RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"), "lr: " << lr);
     vector<string> lr_joint_names{"default"};
     node_->declare_parameter(("link_relation." + lr + ".joint_names"), lr_joint_names);
     node_->get_parameter(("link_relation." + lr + ".joint_names"), lr_joint_names);
-    // for (string jn:lr_joint_names) {
-    //   RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"), "jn: " << jn);
-    // }
     kinematics.joint_relation_name.push_back(lr_joint_names);
   }
 
   node_->declare_parameter("urdf_file_path", "default");
   string urdf_file_path = "overwrite";
   node_->get_parameter("urdf_file_path", urdf_file_path);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "urdf_file_path: %s", urdf_file_path.c_str());
 
   node_->declare_parameter("viapoints_file_path", "default");
   string viapoints_file_path = "overwrite";
   node_->get_parameter("viapoints_file_path", viapoints_file_path);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "viapoints_file_path: %s", viapoints_file_path.c_str());
 
+  // order: sl0 sl1 sl2 el0 el1 wl0 wl1 wl2 h0 h1 h2 sr0 sr1 sr2 er0 er1 wr0 wr1 wr2
   vector<string> joint_names_ordered(info_.joints.size()); 
   for (uint i = 0; i < info_.joints.size(); i++) {
     joint_names_ordered[i] = info_.joints[i].name;
+    RCLCPP_INFO(rclcpp::get_logger("RobotHardware"),"joint_names_ordered[%ld] = %s", i, joint_names_ordered[i]);
   }
-  sort(joint_names_ordered.begin(), joint_names_ordered.end());
 
+  RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "urdf_file_path: %s", urdf_file_path.c_str());
+  RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "viapoints_file_path: %s", viapoints_file_path.c_str());
+  for(int i = 0; i < joint_names_ordered.size(); i++) {
+      RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "joint_names_ordered[%d]: %s", i, joint_names_ordered[i].c_str());
+  }
   kinematics.init(urdf_file_path, viapoints_file_path, joint_names_ordered);
 
   q.resize(kinematics.number_of_dofs);
@@ -156,25 +153,20 @@ CallbackReturn RobotHardware::on_init(const hardware_interface::HardwareInfo & i
   vector<double> joint_dt_default{0.0};
   node_->declare_parameter("joint_dt", joint_dt_default);
   node_->get_parameter("joint_dt", kinematics.joint_dt);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "joint_dt[0]: %f", kinematics.joint_dt[0]);
     
   vector<double> joint_kp_default{0.0};
   node_->declare_parameter("joint_kp", joint_kp_default);
   node_->get_parameter("joint_kp", param_kp);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "joint_kp[0]: %f", param_kp[0]);
 
   vector<double> joint_kd_default{0.0};
   node_->declare_parameter("joint_kd", joint_kd_default);
   node_->get_parameter("joint_kd", param_kd);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "joint_kd[0]: %f", param_kd[0]);
 
 
 
   for (size_t joint = 0; joint < kinematics.number_of_dofs; joint++) {
     Kp_[joint] = param_kp[joint];
     Kd_[joint] = param_kd[joint];
-    // RCLCPP_INFO_STREAM(rclcpp::get_logger("RobotHardware"),kinematics.joint_names[joint] << "\tdt=" << kinematics.joint_dt[joint] <<
-    //                    "\tkp=" << param_kp[joint] << "\tkd=" << param_kd[joint]);
   }
 
 
@@ -193,7 +185,11 @@ CallbackReturn RobotHardware::on_init(const hardware_interface::HardwareInfo & i
     hw_commands_[joint] = pos_handle; // cardsflow_command_interface.registerHandle(pos_handle);
   }
 
-  // TODO How to pass this information to the controller 
+  /**
+   * registerInterface was used in ROS1 but
+   * it is not neccessary anymore because the controller update is now executed in this class.
+   * later the hw_states_ and hw_commands_ will passed in a different way to the controller
+   */
   // registerInterface(&cardsflow_command_interface);
 
   /**
@@ -219,15 +215,12 @@ CallbackReturn RobotHardware::on_init(const hardware_interface::HardwareInfo & i
   vector<string> endeffectors_default{"default"};
   node_->declare_parameter("endeffectors", endeffectors_default);
   node_->get_parameter("endeffectors", kinematics.endeffectors);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "kinematics.endeffectors[0]: %s", kinematics.endeffectors[0].c_str());
   kinematics.endeffector_dof_offset.push_back(0);
   Ld.resize(kinematics.endeffectors.size());
   for (string ef:kinematics.endeffectors) {
-    // RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"),"configuring endeffector " << ef);
     vector<string> ik_joints;
     node_->declare_parameter((ef + ".joints"), ik_joints);
     node_->get_parameter((ef + ".joints"), ik_joints);
-    // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "ik_joints[0]: %s", ik_joints[0].c_str());
     if (ik_joints.empty()) {
       RCLCPP_WARN(rclcpp::get_logger("rclcpp"),
                   "endeffector %s has no joints defined, check your endeffector.yaml or parameter server.  skipping...",
@@ -254,9 +247,7 @@ std::vector<hardware_interface::StateInterface> RobotHardware::export_state_inte
   std::vector<hardware_interface::StateInterface> state_interfaces;
   for (uint i = 0; i < info_.joints.size(); i++)
   {
-    state_interfaces.emplace_back(hardware_interface::StateInterface(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_states_dummy_[i]));
-    // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "export_state_interfaces: %s/%s/%f",
-    //   info_.joints[i].name.c_str(), hardware_interface::HW_IF_POSITION, hw_states_dummy_[i]);
+    state_interfaces.emplace_back(hardware_interface::StateInterface(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_states_fwd_pos_ctrl_[i]));
   }
   return state_interfaces;
 }
@@ -266,48 +257,12 @@ std::vector<hardware_interface::CommandInterface> RobotHardware::export_command_
   std::vector<hardware_interface::CommandInterface> command_interfaces;
   for (uint i = 0; i < info_.joints.size(); i++)
   {
-    command_interfaces.emplace_back(hardware_interface::CommandInterface(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_commands_dummy_[i]));
-    // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "export_command_interfaces: %s/%s/%f",
-    //   info_.joints[i].name.c_str(), hardware_interface::HW_IF_POSITION, hw_commands_dummy_[i]);
+    command_interfaces.emplace_back(hardware_interface::CommandInterface(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_commands_fwd_pos_ctrl_[i]));
   }
   return command_interfaces;
 }
 
 void RobotHardware::update() {
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "debug_: %d", debug_);
-  // for (size_t i = 0; i < q.size(); i++) {
-  //   RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "update start:  q(%ld) = %f", i, q(i));
-  // }
-  // for (size_t i = 0; i < qd.size(); i++) {
-  //   RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "update start: qd(%ld) = %f", i, qd(i));
-  // }
-
-  std::stringstream ss2;
-  ss2 << "q_target: " << q_target.transpose().format(fmt);
-  RCUTILS_LOG_INFO_THROTTLE(RCUTILS_STEADY_TIME, 500, ss2.str().c_str());
-
-  if (debug_) {
-    if (node_->has_parameter("joint_dt"))
-      node_->get_parameter("joint_dt", kinematics.joint_dt);
-      for (size_t joint = 0; joint < kinematics.number_of_dofs; joint++) {
-        RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "kinematics.joint_dt[%ld]: %f", joint, kinematics.joint_dt[joint]);
-      }
-    if (node_->has_parameter("joint_kp")){
-      node_->get_parameter("joint_kp", param_kp);
-      for (size_t joint = 0; joint < kinematics.number_of_dofs; joint++) {
-        Kp_[joint] = param_kp[joint];
-        RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "param_kp[%ld]: %f", joint, param_kp[joint]);
-      }
-    }
-    if (node_->has_parameter("joint_kd")) {
-      node_->get_parameter("joint_kd", param_kd);
-      for (size_t joint = 0; joint < kinematics.number_of_dofs; joint++) {
-        Kd_[joint] = param_kd[joint];
-        RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "param_kd[%ld]: %f", joint, param_kd[joint]);
-      }
-    }
-  }
-
 
   // TODO: Run the below code in critical section to avoid Mutex with the JointState and PROBABLY the controller
 
@@ -341,31 +296,17 @@ void RobotHardware::update() {
     }
   }
 
-  // for(size_t i=0;i<kinematics.number_of_joints;i++){
-  //   RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "(q[%ld],qd[%ld],qdd[%ld]) = (%f,%f,%f)", i, i, i, q[i], qd[i], qdd[i]);
-  // }
-  // for(size_t i = 0; i< kinematics.endeffectors.size();i++) {
-  //   RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "Ld[%ld] = %f", i, Ld[i]);
-  // }
+
   // ----------------------------------------------------------------------------
   // Do one step forward Kinematics with current tendon velocity Ld and current state
   vector<VectorXd> state_next = kinematics.oneStepForward(q, qd, Ld);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "state_next.size(): %d", state_next.size());
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "state_next[0].size(): %d", state_next[0].size());
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "state_next[1].size(): %d", state_next[1].size());
 
   if(!this->external_robot_state){
     for(size_t i=0;i<kinematics.number_of_joints;i++){
-      // if (state_next[0][i] < 0.0001)
-      //   q[i] = 0.0;
-      // else
       q[i] = state_next[0][i];
       qd[i] = state_next[1][i];
-      hw_states_dummy_[i] = q[i]; // TODO this is botch!
+      hw_states_fwd_pos_ctrl_[i] = q[i]; // This sets the angle for the Rviz visualization
     }
-    // std::stringstream ss;
-    // ss << "q: " << q.transpose().format(fmt);
-    // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), ss.str().c_str());
   }
 
   if(!simulated){
@@ -373,36 +314,18 @@ void RobotHardware::update() {
     kinematics.getRobotCableFromJoints(l_next);
   }
 
-  print_vec(q, "q       ");
+  print_vec(q, "q");
 
-  // for (size_t i = 0; i < q.size(); i++) {
-  //   RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "update end:    q(%ld) = %f", i, q(i));
-  // }
-  // for (size_t i = 0; i < qd.size(); i++) {
-  //   RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "update end:   qd(%ld) = %f", i, qd(i));
-  // }
-
-  // TODO
-  // VectorXd q_ctrl_vec(hw_commands_.size());
   for (size_t i = 0; i < hw_commands_.size(); i++) {
-    controller_update(hw_commands_[i], rclcpp::Clock().now(), rclcpp::Clock().now() - last_update[i], i);
-    // if (hw_commands_[i].getJointPositionCommand() < 0.0001)
-    //   q_ctrl_vec[i] = 0.0;
-    // else
-    //   q_ctrl_vec[i] = hw_commands_[i].getJointPositionCommand();
+    controller_update(hw_commands_[i], rclcpp::Clock().now(), rclcpp::Clock().now() - last_update[i]);
   }
-  // std::stringstream ss3;
-  // ss3 << "q_ctrl_vec: " << q_ctrl_vec.transpose().format(fmt);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), ss3.str().c_str());
+
 }
 
-// TODO controller_interface::return_type RobotHardware::controller_update(const rclcpp::Time & time, const rclcpp::Duration & period)
-void RobotHardware::controller_update(hardware_interface::CardsflowHandle & joint, const rclcpp::Time & time, const rclcpp::Duration & period, size_t i)
+void RobotHardware::controller_update(hardware_interface::CardsflowHandle & joint, const rclcpp::Time & time, const rclcpp::Duration & period)
 {
   double q_ctrl = joint.getPosition();
   double q_target_ctrl = joint.getJointPositionCommand();
-  // if (i == 7) RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "q_ctrl              = %f", q_ctrl);
-  // if (i == 7) RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "q_target_ctrl       = %f", q_target_ctrl);
   MatrixXd L = joint.getL();
   VectorXd Kp = *joint.Kp_;
   VectorXd Kd = *joint.Kd_;
@@ -413,13 +336,13 @@ void RobotHardware::controller_update(hardware_interface::CardsflowHandle & join
   VectorXd ld = L.col(joint_index) * (Kd[joint_index] * (p_error - p_error_last[joint_index])/period.seconds() + Kp[joint_index] * p_error);
   joint.setMotorCommand(ld);
   p_error_last[joint_index] = p_error;
-  last_update[joint_index] = time; // rclcpp::Clock().now();
+  last_update[joint_index] = time;
 }
 
 void RobotHardware::print_vec(VectorXd vec, std::string name) {
   VectorXd vec_print;
-  vec_print.resize(kinematics.number_of_dofs);
-  for(size_t i=0;i<kinematics.number_of_joints;i++){
+  vec_print.resize(vec.size());
+  for(size_t i=0; i<vec.size(); i++){
     if (vec[i] < 0.0001)
       vec_print[i] = 0.0;
     else
@@ -427,7 +350,7 @@ void RobotHardware::print_vec(VectorXd vec, std::string name) {
   }
   std::stringstream ss1;
   ss1 << name << ": " << vec_print.transpose().format(fmt);
-  RCUTILS_LOG_INFO_THROTTLE(RCUTILS_STEADY_TIME, 500, ss1.str().c_str());
+  RCUTILS_LOG_INFO_THROTTLE(RCUTILS_STEADY_TIME, 100, ss1.str().c_str());
   // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), ss1.str().c_str());
 }
 
@@ -444,16 +367,19 @@ void RobotHardware::publishViz() {
           msg.l.push_back(l[i]);
           msg.ld.push_back(Ld[0][i]); // TODO: only first endeffector Ld is send here
           msg.number_of_viapoints.push_back(kinematics.cables[i].viaPoints.size());
-          for (auto vp:kinematics.cables[i].viaPoints) {
-            geometry_msgs::msg::Vector3 VP;
-            // tf2::convert(vp->global_coordinates, VP); // TODO
-            msg.viapoints.push_back(VP);
+          for (shared_ptr<ViaPoint> vp : kinematics.cables[i].viaPoints) {
+            geometry_msgs::msg::Vector3 vp_msg;
+            // tf2::convert(vp->global_coordinates, vp_msg);
+            vp_msg.x = vp->global_coordinates(0);
+            vp_msg.y = vp->global_coordinates(1);
+            vp_msg.z = vp->global_coordinates(2);
+            msg.viapoints.push_back(vp_msg);
           }
       }
       tendon_state_pub->publish(msg);
     }
     { // robot state publisher
-      // static int seq = 0;
+      static int seq = 0;
       vector<Matrix4d> robot_poses = kinematics.getRobotPosesFromJoints();
       for (size_t i = 0; i < kinematics.number_of_links; i++) {
         geometry_msgs::msg::PoseStamped msg;
@@ -461,7 +387,22 @@ void RobotHardware::publishViz() {
         msg.header.stamp = rclcpp::Clock().now();
         msg.header.frame_id = kinematics.link_names[i];
         Isometry3d iso(robot_poses[i]);
-        // tf2::convert(iso, msg.pose); // TODO
+
+        // tf::poseEigenToMsg(iso, msg.pose);
+        Eigen::Quaterniond q = (Eigen::Quaterniond)iso.linear();
+        msg.pose.position.x = iso.translation()[0];
+        msg.pose.position.y = iso.translation()[1];
+        msg.pose.position.z = iso.translation()[2];
+        msg.pose.orientation.x = q.x();
+        msg.pose.orientation.y = q.y();
+        msg.pose.orientation.z = q.z();
+        msg.pose.orientation.w = q.w();
+        if (msg.pose.orientation.w < 0) {
+          msg.pose.orientation.x *= -1;
+          msg.pose.orientation.y *= -1;
+          msg.pose.orientation.z *= -1;
+          msg.pose.orientation.w *= -1;
+        }
         robot_state_pub->publish(msg);
       }
     }
@@ -481,7 +422,23 @@ void RobotHardware::publishViz() {
           msg.header.stamp = rclcpp::Clock().now();
           msg.header.frame_id = kinematics.link_names[i];
           Isometry3d iso(target_poses[i]);
-          // tf2::convert(iso, msg.pose); // TODO
+
+          // tf::poseEigenToMsg(iso, msg.pose);
+          Eigen::Quaterniond q = (Eigen::Quaterniond)iso.linear();
+          msg.pose.position.x = iso.translation()[0];
+          msg.pose.position.y = iso.translation()[1];
+          msg.pose.position.z = iso.translation()[2];
+          msg.pose.orientation.x = q.x();
+          msg.pose.orientation.y = q.y();
+          msg.pose.orientation.z = q.z();
+          msg.pose.orientation.w = q.w();
+          if (msg.pose.orientation.w < 0) {
+            msg.pose.orientation.x *= -1;
+            msg.pose.orientation.y *= -1;
+            msg.pose.orientation.z *= -1;
+            msg.pose.orientation.w *= -1;
+          }
+
           robot_state_target_pub->publish(msg);
         }
 
@@ -502,10 +459,19 @@ void RobotHardware::publishViz() {
         Vector3d axis;
         axis << kinematics.joint_axis[i - 1][3], kinematics.joint_axis[i - 1][4], kinematics.joint_axis[i - 1][5];
         axis = pose.block(0, 0, 3, 3) * axis;
-
-        // TODO update common_utilities with rviz_visualization
         // msg.origin.push_back(convertEigenToGeometry(pose.topRightCorner(3, 1)));
+        geometry_msgs::msg::Vector3 geom_msg1;
+        geom_msg1.x = pose.topRightCorner(3, 1)(0, 0);
+        geom_msg1.y = pose.topRightCorner(3, 1)(1, 0);
+        geom_msg1.z = pose.topRightCorner(3, 1)(2, 0);
+        msg.origin.push_back(geom_msg1);
         // msg.axis.push_back(convertEigenToGeometry(axis));
+        geometry_msgs::msg::Vector3 geom_msg2;
+        geom_msg2.x = axis(0);
+        geom_msg2.y = axis(1);
+        geom_msg2.z = axis(2);
+        msg.axis.push_back(geom_msg2);
+
         msg.torque.push_back(kinematics.torques[i - 1]);
         msg.q.push_back(q[i-1]);
         msg.qd.push_back(qd[i-1]);
@@ -513,6 +479,7 @@ void RobotHardware::publishViz() {
         cf_msg.position.push_back(q[i-1]);
         cf_msg.velocity.push_back(qd[i-1]);
       }
+
       joint_state_pub->publish(msg);
       cardsflow_joint_states_pub->publish(cf_msg);
     }
@@ -520,10 +487,7 @@ void RobotHardware::publishViz() {
 }
 
 
-void RobotHardware::JointTarget(const sensor_msgs::msg::JointState::SharedPtr msg){
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"),"JointTarget received: %s, %f, %ld, %ld ", msg->name[0].c_str(), msg->position[0], msg->velocity.size(), msg->effort.size());
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"),"JointTarget msg->position.size(): %ld ", msg->position.size());
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"),"JointTarget msg->name.size():     %ld ", msg->name.size());  
+void RobotHardware::JointTarget(const sensor_msgs::msg::JointState::SharedPtr msg){ 
   int i = 0;
   if (msg->position.size() == msg->name.size())
   {
@@ -539,7 +503,8 @@ void RobotHardware::JointTarget(const sensor_msgs::msg::JointState::SharedPtr ms
         else {
           q_target(joint_index) = msg->position[i];
         }
-        // ROS_WARN_STREAM(q_target(joint_index));
+        if (q_target(joint_index) < -0.001 || 0.001 < q_target(joint_index))
+          RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "for %s set q_target(%d) = %f", joint.c_str(), joint_index, q_target(joint_index));
         // qd_target(joint_index) = msg->velocity[i];
       } else {
         RCUTILS_LOG_WARN_THROTTLE(RCUTILS_STEADY_TIME, 5000, "joint %s not found in model", joint.c_str());
@@ -547,11 +512,6 @@ void RobotHardware::JointTarget(const sensor_msgs::msg::JointState::SharedPtr ms
       i++;
     }
   }
-
-  // std::stringstream ss;
-  // ss << "q_target: " << q_target.transpose().format(fmt);
-  // RCLCPP_INFO(rclcpp::get_logger("RobotHardware"), "%s", ss.str().c_str());
-
 }
 
 void RobotHardware::JointState(const sensor_msgs::msg::JointState::SharedPtr msg) {
@@ -593,24 +553,19 @@ bool RobotHardware::FreezeService(std_srvs::srv::Trigger::Request::SharedPtr req
 }
 
 void RobotHardware::ZeroJoints(const roboy_control_msgs::msg::Strings::SharedPtr msg) {
-    if (msg->names.empty()) {
-        RCLCPP_WARN_STREAM(rclcpp::get_logger("RobotHardware"),"Setting all joint targets to zero");
-        //for (int i = 1; i < number_of_links; i++) {
-        q_target.setZero();
-        //}
-    }
-    else {
-        for (string joint: msg->names) {
-            RCLCPP_INFO_STREAM(rclcpp::get_logger("RobotHardware"),"zero " << joint);
-            int joint_index = kinematics.GetJointIdByName(joint);
-            if (joint_index != iDynTree::JOINT_INVALID_INDEX) {
-                q_target(joint_index) = 0;
-            }
-        };
-    }
+  if (msg->names.empty()) {
+    RCLCPP_WARN_STREAM(rclcpp::get_logger("RobotHardware"),"Setting all joint targets to zero");
+    //for (int i = 1; i < number_of_links; i++) {
+    q_target.setZero();
+    //}
+  }
+  else {
+    for (string joint: msg->names) {
+      RCLCPP_INFO_STREAM(rclcpp::get_logger("RobotHardware"),"zero " << joint);
+      int joint_index = kinematics.GetJointIdByName(joint);
+      if (joint_index != iDynTree::JOINT_INVALID_INDEX) {
+        q_target(joint_index) = 0;
+      }
+    };
+  }
 }
-
-// #include "pluginlib/class_list_macros.hpp"
-
-// PLUGINLIB_EXPORT_CLASS(
-//   cardsflow::kindyn::RobotHardware, hardware_interface::SystemInterface)

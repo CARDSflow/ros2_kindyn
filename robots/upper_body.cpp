@@ -1,26 +1,25 @@
-// #include "kindyn/vrpuppet.hpp"
 #include "ros2_control_kindyn/robot.hpp"
 #include <thread>
 
-// #include "common_utilities/CommonDefinitions.hpp" // TODO
-#include "roboy_middleware_msgs/msg/motor_state.hpp"            // <roboy_middleware_msgs/MotorState.h>
-#include "roboy_middleware_msgs/msg/roboy_state.hpp"            // <roboy_middleware_msgs/RoboyState.h>
-#include "roboy_middleware_msgs/msg/motor_info.hpp"             // <roboy_middleware_msgs/MotorInfo.h>
+// #include "ros2_common_utilities/CommonDefinitions.hpp" // TODO include is not working
+#include "roboy_middleware_msgs/msg/motor_state.hpp" 
+#include "roboy_middleware_msgs/msg/roboy_state.hpp"
+#include "roboy_middleware_msgs/msg/motor_info.hpp"
 #include "roboy_middleware_msgs/msg/motor_config.hpp"
-#include "roboy_middleware_msgs/msg/system_status.hpp"          // <roboy_middleware_msgs/SystemStatus.h>
-#include "roboy_middleware_msgs/msg/body_part.hpp"              // <roboy_middleware_msgs/BodyPart.h>
-#include "roboy_simulation_msgs/msg/tendon.hpp"                 // <roboy_simulation_msgs/Tendon.h>
-#include "roboy_control_msgs/srv/set_controller_parameters.hpp" // <roboy_control_msgs/SetControllerParameters.h>
-#include "roboy_middleware_msgs/srv/control_mode.hpp"           // <roboy_middleware_msgs/ControlMode.h>
-#include "roboy_middleware_msgs/srv/motor_config_service.hpp"   // <roboy_middleware_msgs/MotorConfigService.h>
-#include "roboy_middleware_msgs/srv/set_strings.hpp"            // <roboy_middleware_msgs/SetStrings.h>
-#include <std_srvs/srv/empty.hpp>                               // <std_srvs/Empty.h>
+#include "roboy_middleware_msgs/msg/system_status.hpp"
+#include "roboy_middleware_msgs/msg/body_part.hpp" 
+#include "roboy_simulation_msgs/msg/tendon.hpp"
+#include "roboy_control_msgs/srv/set_controller_parameters.hpp" 
+#include "roboy_middleware_msgs/srv/control_mode.hpp"
+#include "roboy_middleware_msgs/srv/motor_config_service.hpp" 
+#include "roboy_middleware_msgs/srv/set_strings.hpp"
+#include <std_srvs/srv/empty.hpp>
 
-// #include <tf2/tf.h> // TODO
-#include <tf2_ros/transform_listener.h> // #include <tf2/transform_listener.h> 
+#include "tf2/transform_datatypes.h"
+#include <tf2_ros/transform_listener.h>
+#include "tf2_ros/transform_broadcaster.h" 
 
 #include "rclcpp/rclcpp.hpp"
-// #include "controller_interface/controller_interface.hpp"
 
 
 using namespace std;
@@ -39,20 +38,20 @@ private:
     rclcpp::Service<roboy_middleware_msgs::srv::SetStrings>::SharedPtr init_pose;
     std::shared_ptr<rclcpp::executors::MultiThreadedExecutor> spinner; // ros::AsyncSpinner *spinner;
     std::thread executor_thread;
-    // ros::ServiceClient motor_control_mode, motor_config, control_mode;
 
     map<int,int> pos, initial_pos;
     map<string, rclcpp::Client<roboy_middleware_msgs::srv::MotorConfigService>::SharedPtr> motor_config;
     // map<string, rclcpp::Client<???>::SharedPtr> motor_control_mode; // not used
     map<string, rclcpp::Client<roboy_middleware_msgs::srv::ControlMode>::SharedPtr> control_mode;
     map<string, bool> motor_status_received;
-    map<int, bool> communication_established; // keeps track of communication quality for each motor
+    map<int, bool> communication_established; /// keeps track of communication quality for each motor
     map<int,float> l_offset, position, tendon_length, muscle_length_offset_correction;
     VectorXd l_current;
     map<string, vector<float>> integral, error_last;
     // std::shared_ptr<tf::TransformListener> listener; // TODO
     std::vector<string> body_parts = {"head", "shoulder_right", "shoulder_left", "wrist_right","wrist_left"};//, "shoulder_left"};//}, "elbow_left"};
     map<string, bool> init_called;
+    std::vector<bool> initialized;
     std::shared_ptr<std::thread> system_status_thread;
     rclcpp::Time prev_roboy_state_time;
     enum BulletPublish {zeroes, current};
@@ -131,25 +130,13 @@ public:
         tendon_motor_pub = node_->create_publisher<roboy_simulation_msgs::msg::Tendon>(topic_root + "control/tendon_state_motor", 1);
 
         // TODO
-        std::vector<bool> init_called2 = {false, false, true, true};
-        std::vector<bool> init_called3 = {};
-        node_->declare_parameter("initialized", init_called3);
-        node_->get_parameter("initialized", init_called3);
-        for(size_t i = 0; i < init_called3.size(); i++) {
-            RCLCPP_INFO(rclcpp::get_logger("UpperBody"), "init_called3[%ld]: %d", i, init_called3[i]);
+        // std::vector<rclcpp::Parameter> initialized_parameter{rclcpp::Parameter("initialized", init_called)};
+        // node_->set_parameters(initialized_parameter)
+        initialized.resize(body_parts.size());
+        for (size_t i = 0; i < initialized.size(); i++) {
+            initialized[i] = false;
         }
 
-        // rclcpp::Parameter initialized_parameter{rclcpp::Parameter("initialized", init_called2)};
-        std::vector<rclcpp::Parameter> initialized_parameter{rclcpp::Parameter("initialized", init_called2)};
-        node_->set_parameters(initialized_parameter);
-        // node_->set_parameter("initialized", init_called2); // does not make sense anymore because each node has its own parameters in ROS2. 
-
-        node_->get_parameter("initialized", init_called3);
-        for(size_t i = 0; i < init_called3.size(); i++) {
-            RCLCPP_INFO(rclcpp::get_logger("UpperBody"), "init_called3[%ld]: %d", i, init_called3[i]);
-        }
-
-        // RCLCPP_INFO(rclcpp::get_logger("UpperBody"), "true: %d, false: %d", true, false);
         declare_parameter_body_part_motor_ids();
 
         RCLCPP_INFO_STREAM(rclcpp::get_logger("UpperBody"), "Finished setup");
@@ -238,7 +225,7 @@ public:
         // if (name == "wrist_left" || name == "wrist_right") {
         //     msg->control_mode = DISPLACEMENT;
         // } else {
-            msg->control_mode = 3; // DIRECT_PWM; TODO CommonDefinitions.h from ros2_common_utilities
+            msg->control_mode = 3; // CONTROL_MODES::DIRECT_PWM; // TODO CommonDefinitions.h from ros2_common_utilities
         // }
         // TODO: fix in plexus PWM direction for the new motorboard
         std::vector<float> set_points(motor_ids.size(), pwm);
@@ -558,37 +545,14 @@ public:
      * Updates the robot model
      */
     hardware_interface::return_type read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
-        // RCLCPP_INFO(rclcpp::get_logger("UpperBody"), "reading");
         RobotHardware::update();
         return hardware_interface::return_type::OK;
     };
+
     /**
      * Sends motor commands to the real robot
      */
     hardware_interface::return_type write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) override {
-        
-
-        // for (auto body_part: body_parts) {
-        //     std::vector<long int> motor_ids;
-        //     node_->get_parameter(body_part+".motor_ids", motor_ids);
-        //     // RCLCPP_INFO(rclcpp::get_logger("UpperBody"), "%s/motor_ids: [%ld, %ld, %ld, ...]", body_part.c_str(), motor_ids[0], motor_ids[1], motor_ids[2]);
-            
-        //     VectorXd setpoint_vec(motor_ids.size());
-        //     for (size_t i = 0; i < motor_ids.size(); i++) {
-        //         auto setpoint = -l_next[motor_ids[i]] + l_offset[motor_ids[i]];
-        //         setpoint_vec[i] = setpoint;
-        //     }
-        //     std::stringstream ss4;
-        //     ss4 << body_part << ": setpoint_vec: " << setpoint_vec.transpose().format(fmt);
-        //     RCLCPP_INFO(rclcpp::get_logger("UpperBody"), ss4.str().c_str());
-        // }
-
-
-
-
-
-        
-        // // RCLCPP_INFO(rclcpp::get_logger("UpperBody"), "writing");
         // // check if plexus is alive
         // RCLCPP_INFO(rclcpp::get_logger("UpperBody"), "rclcpp::Clock().now(): %ld, prev_roboy_state_time: %ld", rclcpp::Clock().now().nanoseconds(), prev_roboy_state_time.nanoseconds());
         // auto diff = rclcpp::Clock().now() - prev_roboy_state_time;
@@ -644,7 +608,7 @@ public:
 };
 
 // /**
-//  * controller manager update thread. Here you can define how fast your controllers should run
+//  * The controller manager update thread is not needed in ROS2. It was used to define how fast the controllers should run
 //  * @param cm pointer to the controller manager
 //  */
 // void update(controller_manager::ControllerManager *cm) {
@@ -659,7 +623,7 @@ public:
 //     }
 // }
 
-// TODO: still needed?
+
 int main(int argc, char *argv[]) {
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "starting main method of UpperBody");
 
@@ -684,7 +648,7 @@ int main(int argc, char *argv[]) {
     }
     RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "\nurdf file path: %s\ncardsflow_xml %s", urdf.c_str(), cardsflow_xml.c_str());
 
-    // UpperBody robot(urdf, cardsflow_xml,robot_model, debug);
+    // UpperBody robot(); // not needed
 
     // controller_manager::ControllerManager cm(&robot);
 
@@ -704,7 +668,7 @@ int main(int argc, char *argv[]) {
     //     rate.sleep();
     // }
 
-    // RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "TERMINATING...");
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "TERMINATING...");
     // update_thread.join();
 
     return 0;

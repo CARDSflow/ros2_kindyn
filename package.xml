@@ -26,6 +26,7 @@
   <depend>realtime_tools</depend>
   <depend>trajectory_msgs</depend>
   <depend>tf2_ros</depend>
+  <depend>ros2_common_utilities</depend>
 
 
   <exec_depend>controller_manager</exec_depend>

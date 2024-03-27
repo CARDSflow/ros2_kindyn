@@ -34,8 +34,8 @@ def generate_launch_description():
         ]
     )
     rviz_config_file = PathJoinSubstitution(
-        # [FindPackageShare("ros2_control_upper_body"), "config", "default.rviz"]
-        [FindPackageShare("ros2_control_upper_body"), "config", "rrbot.rviz"]
+        # [FindPackageShare("ros2_control_upper_body"), "config", "default.rviz"] # TODO default RViz configuration file is not working
+        [FindPackageShare("ros2_control_upper_body"), "config", "default2.rviz"] 
     )
 
     config_kindyn = os.path.join(
@@ -76,13 +76,6 @@ def generate_launch_description():
                     config_robots_endeffectors,
                     config_robots_motor_config,
                     ],
-        # # What is happening here?
-        # remappings=[
-        #     (
-        #         "/forward_position_controller/commands",
-        #         "/position_commands",
-        #     ),
-        # ],
         output={
             "stdout": "screen",
             "stderr": "screen",
@@ -121,31 +114,12 @@ def generate_launch_description():
         arguments=["cable_length_controller", "-c", "/controller_manager"],
     )
 
-    # upper_body = Node(
-    #     package="ros2_control_kindyn",
-    #     executable="upper_body",
-    #     # name="controller_manager",
-    #     parameters=[robot_description,
-    #                 robot_controllers, 
-    #                 config_kindyn,
-    #                 config_robots_link_joint_relation,
-    #                 config_robots_control_parameters,
-    #                 config_robots_endeffectors,
-    #                 config_robots_motor_config,
-    #                 ],
-    #     output={
-    #         "stdout": "screen",
-    #         "stderr": "screen",
-    #     },
-    # )
-
     nodes = [
         control_node,
         robot_state_pub_node,
         rviz_node,
         joint_state_broadcaster_spawner,
         robot_controller_spawner,
-        # upper_body,
     ]
 
     return LaunchDescription(nodes)

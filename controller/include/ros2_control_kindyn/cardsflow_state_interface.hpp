@@ -111,9 +111,11 @@ namespace hardware_interface {
         const VectorXd *CG_; /// Coriolis+Gravity vector
     };
 
-    // Not needed anymore, because in ROS2 the controller cannot access classes anymore that represent the current state of several joints. 
-    // This will hopefully added again with Jazzy: https://github.com/ros-controls/ros2_control/pull/1240
-    // In addition, there is no HardwareResourceManager which can register Handles like this CardsflowHandle for each joint.
+    /* Not needed anymore, because in ROS2 the controller cannot access whole classes anymore that represent the current state of several joints. 
+     * This will hopefully added again with Jazzy: https://github.com/ros-controls/ros2_control/pull/1240
+     * 
+     * In addition, there is no HardwareResourceManager which can register Handles like this CardsflowHandle for each joint in ROS2.
+     */
     // class CardsflowStateInterface : public HardwareResourceManager<CardsflowStateHandle> {
     // };
 }

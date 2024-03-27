@@ -13,6 +13,7 @@ set(HW_IF_INCLUDE_DEPENDS
   std_srvs
   roboy_middleware_msgs
   roboy_control_msgs
+  ros2_common_utilities
   tf2_ros
 )
 set(REF_GEN_INCLUDE_DEPENDS
@@ -41,10 +42,10 @@ foreach(Dependency IN ITEMS ${CONTROLLER_INCLUDE_DEPENDS})
   find_package(${Dependency} REQUIRED)
 endforeach()
 
-# idyntree ## TODO is this the correct way? Because include_directories is not used anywhere else.
+# idyntree
 find_package(iDynTree 0.11.1 REQUIRED)
 include_directories(${iDynTree_INCLUDE_DIRS})
-# # Eigen    ## TODO is this the correct way? Because include_directories is not used anywhere else.
+# # Eigen
 # find_package(Eigen3 REQUIRED)
 # include_directories(${EIGEN3_INCLUDE_DIRS})
 
@@ -82,6 +83,9 @@ ament_target_dependencies(
   ros2_control_kindyn PUBLIC
   ${HW_IF_INCLUDE_DEPENDS}
   ${CONTROLLER_INCLUDE_DEPENDS}
+)
+target_include_directories(ros2_control_kindyn
+  PRIVATE ${ros2_common_utilities_INCLUDE_DIRS}
 )
 target_link_libraries(
   ros2_control_kindyn
