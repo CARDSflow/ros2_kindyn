@@ -1,4 +1,4 @@
-# ros2_common_utilities
+# ros2_kindyn
 
 This package is the ROS2 update of the [kindyn](https://github.com/CARDSflow/kindyn/tree/main) package. It contains the core c++ implementation for controlling cable robots.
 
