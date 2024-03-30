@@ -12,7 +12,7 @@ def generate_launch_description():
             " ",
             PathJoinSubstitution(
                 [
-                    FindPackageShare("ros2_control_upper_body"),
+                    FindPackageShare("ros2_roboy3_models"),
                     "urdf",
                     "robody.urdf",
                 ]

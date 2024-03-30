@@ -28,9 +28,9 @@
         physics: "ode"
 
         # TODO
-        urdf_file_path:      "/home/benno/code/ros2_ws/src/ros2_control_upper_body/urdf/robody.urdf"   # ROS1 container: /roboy3/src/robots/upper_body/model.urdf
-        viapoints_file_path: "/home/benno/code/ros2_ws/src/ros2_control_upper_body/urdf/cardsflow.xml" # ROS1 container: /roboy3/src/robots/upper_body/cardsflow.xml
-        cardsflow_xml:       "/home/benno/code/ros2_ws/src/ros2_control_upper_body/cardsflow.xml"
+        urdf_file_path:      "/home/benno/code/ros2_ws/src/ros2_roboy3_models/urdf/robody.urdf"   # ROS1 container: /roboy3/src/robots/upper_body/model.urdf
+        viapoints_file_path: "/home/benno/code/ros2_ws/src/ros2_roboy3_models/urdf/cardsflow.xml" # ROS1 container: /roboy3/src/robots/upper_body/cardsflow.xml
+        cardsflow_xml:       "/home/benno/code/ros2_ws/src/ros2_roboy3_models/cardsflow.xml"
 
         q_target: [0.0, 0.0, 0.0]
         pwm: 5.0

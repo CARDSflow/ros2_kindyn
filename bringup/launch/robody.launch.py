@@ -16,7 +16,7 @@ def generate_launch_description():
             " ",
             PathJoinSubstitution(
                 [
-                    FindPackageShare("ros2_control_upper_body"),
+                    FindPackageShare("ros2_roboy3_models"),
                     "urdf",
                     "robody.urdf",
                 ]
@@ -34,8 +34,8 @@ def generate_launch_description():
         ]
     )
     rviz_config_file = PathJoinSubstitution(
-        # [FindPackageShare("ros2_control_upper_body"), "config", "default.rviz"] # TODO default RViz configuration file is not working
-        [FindPackageShare("ros2_control_upper_body"), "config", "default2.rviz"] 
+        # [FindPackageShare("ros2_roboy3_models"), "config", "default.rviz"] # TODO default RViz configuration file is not working
+        [FindPackageShare("ros2_roboy3_models"), "config", "default2.rviz"] 
     )
 
     config_kindyn = os.path.join(
@@ -44,22 +44,22 @@ def generate_launch_description():
         "params.yaml",
     )
     config_robots_link_joint_relation = os.path.join(
-        get_package_share_directory("ros2_control_upper_body"),
+        get_package_share_directory("ros2_roboy3_models"),
         "config",
         "link_joint_relation.yaml",
     )
     config_robots_control_parameters = os.path.join(
-        get_package_share_directory("ros2_control_upper_body"),
+        get_package_share_directory("ros2_roboy3_models"),
         "config",
         "control_parameters.yaml",
     )
     config_robots_endeffectors = os.path.join(
-        get_package_share_directory("ros2_control_upper_body"),
+        get_package_share_directory("ros2_roboy3_models"),
         "config",
         "endeffectors.yaml",
     )
     config_robots_motor_config = os.path.join(
-        get_package_share_directory("ros2_control_upper_body"),
+        get_package_share_directory("ros2_roboy3_models"),
         "config",
         "motor_config.yaml",
     )

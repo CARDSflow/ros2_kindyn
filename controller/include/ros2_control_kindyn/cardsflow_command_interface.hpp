@@ -31,8 +31,8 @@
 #include <cassert>
 #include <string>
 #include "ros2_control_kindyn/cardsflow_state_interface.hpp"
-#include <Eigen/Core>
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Core>
+#include <eigen3/Eigen/Dense>
 
 using namespace Eigen;
 
